@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "내 캘린더",
+    "slug": "my-scheduler-mobile",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "myscheduler",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#16202c",
+    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#16202c" },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.myscheduler.mobile"
+    },
+    "android": {
+      "package": "com.myscheduler.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#16202c",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ]
+    },
+    "web": { "favicon": "./assets/favicon.png" },
+    "plugins": [
+      ["expo-notifications", { "color": "#a8e0ff" }],
+      ["expo-audio", { "microphonePermission": "회의를 녹음해 일정과 할 일을 찾기 위해 마이크를 사용합니다.", "enableBackgroundRecording": true }],
+      ["expo-image-picker", { "photosPermission": "공문·알림장 사진에서 일정을 찾기 위해 사진을 읽습니다.", "cameraPermission": "공문·알림장을 찍어 일정을 찾기 위해 카메라를 사용합니다." }],
+      "expo-secure-store",
+      "expo-sharing",
+      ["react-native-android-widget", {
+        "widgets": [{
+          "name": "Calendar",
+          "label": "내 캘린더",
+          "description": "이번 달 달력과 다가오는 일정",
+          "minWidth": "250dp",
+          "minHeight": "110dp",
+          "targetCellWidth": 4,
+          "targetCellHeight": 3,
+          "maxResizeWidth": "900dp",
+          "maxResizeHeight": "900dp",
+          "resizeMode": "horizontal|vertical",
+          "updatePeriodMillis": 1800000,
+          "previewImage": "./assets/widget-preview.png"
+        }]
+      }]
+    ]
+  }
+}

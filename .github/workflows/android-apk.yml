@@ -1,0 +1,43 @@
+# mobile-v0.2.0 같은 태그를 push하거나 Actions 탭에서 직접 실행하면 설치용 APK를 만든다.
+# 만들어진 APK는 Releases(태그일 때)와 실행 결과의 Artifacts에서 받을 수 있다.
+name: Android APK
+on:
+  push:
+    tags: ['mobile-v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npm test
+      - name: 태그를 앱 버전으로
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          V="${GITHUB_REF_NAME#mobile-v}"
+          node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('app.json'));j.expo.version=process.argv[1];j.expo.android.versionCode=Number(process.argv[2]);fs.writeFileSync('app.json',JSON.stringify(j,null,2))" "$V" "${{ github.run_number }}"
+      - name: 안드로이드 프로젝트 생성
+        run: npx expo prebuild --platform android --no-install
+      - name: APK 빌드
+        run: cd android && ./gradlew assembleRelease --no-daemon
+      - name: 파일 이름 정리
+        run: mv android/app/build/outputs/apk/release/app-release.apk "내캘린더-${GITHUB_REF_NAME}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: "*.apk"
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: "*.apk"
