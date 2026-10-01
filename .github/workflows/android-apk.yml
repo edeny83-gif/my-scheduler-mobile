@@ -15,6 +15,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 멈춰도 최대 6시간 붙잡지 않도록 제한. 실패로 끝나야 기록(로그)을 읽어 원인을 찾을 수 있다.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,8 +34,13 @@ jobs:
           node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('app.json'));j.expo.android=j.expo.android||{};j.expo.android.versionCode=Number(process.argv[1]);fs.writeFileSync('app.json',JSON.stringify(j,null,2))" "${{ github.run_number }}"
       - name: 안드로이드 프로젝트 생성
         run: npx expo prebuild --platform android --no-install
+      # 기본값(-Xmx2048m, Metaspace 512m)으로는 0.3.0(expo-updates 추가)부터
+      # "OutOfMemoryError: Metaspace"가 나며 빌드가 멈췄다. 빌드 서버(메모리 16GB)에 맞게 늘린다.
+      - name: 빌드 메모리 늘리기
+        run: sed -i 's/^org\.gradle\.jvmargs=.*/org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1536m/' android/gradle.properties && grep jvmargs android/gradle.properties
       - name: APK 빌드
-        run: cd android && ./gradlew assembleRelease --no-daemon
+        timeout-minutes: 45
+        run: cd android && ./gradlew assembleRelease --no-daemon --console=plain --stacktrace
       - name: 파일 이름 정리
         run: |
           echo "APP_VERSION=$(node -p "require('./app.json').expo.version")" >> "$GITHUB_ENV"
