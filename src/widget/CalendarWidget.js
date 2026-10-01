@@ -22,7 +22,11 @@ export function CalendarWidget({ events = [], external = [], holidays = [], sett
   const showMonth = w.mode === 'month' && height >= 250;
   const today = sod(now);
   const sel = sod(day ?? now);
-  const listCount = Math.max(1, Math.floor((showMonth ? height - 250 : height - 90) / 22));
+  // 아래 목록은 위젯 높이의 약 1/4(일정 2~7줄)만 쓰고, 나머지는 모두 달력에 준다 → 위젯을 키우면 달력이 커진다
+  const ROW = 22;
+  const listCount = showMonth
+    ? Math.min(7, Math.max(2, Math.round((height * 0.26) / ROW) - 1))
+    : Math.max(1, Math.floor((height - 90) / ROW));
   const dayItems = itemsOnDay(sel, items);
   const shown = dayItems.length > listCount ? dayItems.slice(0, listCount - 1) : dayItems;
   // 두 번째 터치에 앱을 여는 동작 (선택한 날짜로)
@@ -47,12 +51,18 @@ export function CalendarWidget({ events = [], external = [], holidays = [], sett
   let month = null;
   if (showMonth) {
     const m = buildMonth(now, [], { maxLanes: 0 });
-    const cellH = Math.max(18, Math.floor((height - 110 - listCount * 22) / (m.weeks.length + 1)));
+    // 위젯 안쪽 여백 24 + 머리줄 34 + 요일줄 + 목록(제목 1줄 + 일정 listCount줄) + 간격
+    const dowH = 18;
+    const cellH = Math.max(18, Math.floor((height - 24 - 34 - dowH - (listCount + 1) * ROW - 12) / m.weeks.length));
+    const numSize = Math.min(24, Math.max(12, Math.round(cellH * 0.4)));
+    const dowSize = Math.min(14, Math.max(10, Math.round(cellH * 0.26)));
     month = (
       <FlexWidget style={{ flexDirection: 'column', width: 'match_parent' }}>
-        <FlexWidget style={{ flexDirection: 'row', width: 'match_parent' }}>
+        <FlexWidget style={{ flexDirection: 'row', width: 'match_parent', height: dowH }}>
           {DOW.map((d, i) => (
-            <TextWidget key={d} text={d} style={{ flex: 1, textAlign: 'center', fontSize: 10, color: i === 0 ? c.sunday : i === 6 ? c.saturday : dim }} />
+            <FlexWidget key={d} style={{ flex: 1, height: 'match_parent', justifyContent: 'center', alignItems: 'center' }}>
+              <TextWidget text={d} style={{ fontSize: dowSize, color: i === 0 ? c.sunday : i === 6 ? c.saturday : dim }} />
+            </FlexWidget>
           ))}
         </FlexWidget>
         {m.weeks.map((wk, wi) => (
@@ -69,7 +79,7 @@ export function CalendarWidget({ events = [], external = [], holidays = [], sett
               return (
                 <FlexWidget key={i} {...(armed ? tap : { clickAction: 'SELECT_DAY', clickActionData: { day: d } })}
                   style={{ flex: 1, height: 'match_parent', justifyContent: 'center', alignItems: 'center', borderRadius: 6, backgroundColor: isToday ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0)', ...(isSel ? { borderWidth: 1, borderColor: rgba(text, 0.7) } : {}) }}>
-                  <TextWidget text={String(new Date(d).getDate())} style={{ fontSize: 12, color: other ? rgba(text, 0.25) : color, fontWeight: evColor && !other ? '700' : '400' }} />
+                  <TextWidget text={String(new Date(d).getDate())} style={{ fontSize: numSize, color: other ? rgba(text, 0.25) : color, fontWeight: evColor && !other ? '700' : '400' }} />
                 </FlexWidget>
               );
             })}
