@@ -86,5 +86,20 @@ const ms = (y, m, d, h = 0, mi = 0) => new Date(y, m - 1, d, h, mi).getTime();
   assert.strictEqual(cap.body.contents[0].parts[0].file_data.file_uri, 'https://f/9');
   ok('문서→Gemini, 녹음은 Gemini로 전환·키 없으면 안내, 40MB 녹음은 파일째 업로드');
 
+  console.log('빠른 입력 (글·말)');
+  await ai.analyzeCommand({ text: '다음 주 화요일 3시 학부모 상담' }, { fetch: gem, keys: { gemini: 'g' }, provider: 'gemini', geminiModel: 'gm', about: '3학년 담임' });
+  assert.strictEqual(cap.body.contents[0].parts.length, 1);
+  assert.ok(cap.body.contents[0].parts[0].text.includes('학부모 상담') && cap.body.contents[0].parts[0].text.includes('3학년 담임'));
+  let cc;
+  const cla = async (url, init) => { cc = { url, body: JSON.parse(init.body) }; return { ok: true, json: async () => ({ content: [{ type: 'text', text: '{"summary":"s","items":[{"title":"상담","kind":"일정","date":"2026-10-06","time":"15:00"}]}' }] }) }; };
+  const rc = await ai.analyzeCommand({ text: '상담' }, { fetch: cla, keys: { claude: 'c' }, provider: 'claude', claudeModel: 'cm' });
+  assert.ok(cc.url.includes('anthropic') && rc.items[0].time === '15:00' && rc.kind === 'prompt');
+  const rv = await ai.analyzeCommand({ audio: file('말.m4a', new Uint8Array([1, 2])) }, { fetch: gem, keys: { gemini: 'g', claude: 'c' }, provider: 'claude', geminiModel: 'gm' });
+  assert.strictEqual(cap.body.contents[0].parts[0].inline_data.mime_type, 'audio/mp4');
+  assert.ok(cap.body.contents[0].parts[1].text.includes('직접 말한') && rv.kind === 'voice');
+  await assert.rejects(ai.analyzeCommand({ audio: file('말.m4a', new Uint8Array([1])) }, { fetch: gem, keys: { claude: 'c' } }), /Gemini API 키/);
+  await assert.rejects(ai.analyzeCommand({ text: '  ' }, { fetch: gem, keys: { gemini: 'g' } }), /내용을 입력/);
+  ok('글→Gemini/Claude, 말→Gemini(키 없으면 안내), 빈 입력 거부');
+
   console.log('\n모든 핵심 시험 통과');
 })().catch((e) => { console.error('\n실패:', e); process.exit(1); });

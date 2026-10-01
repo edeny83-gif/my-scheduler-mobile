@@ -7,7 +7,7 @@ Expo SDK 57 / React Native 0.86. 데이터의 원본은 폰 안(AsyncStorage)이
 ## 폴더 구조
 | 위치 | 역할 |
 |---|---|
-| `App.js` | 화면 폭으로 레이아웃 결정. `EXPANDED_MIN_WIDTH`(600dp) 이상 = 두 칸(폴드 펼침), 미만 = 아래 탭(폰·폴드 커버) |
+| `App.js` | 화면 폭으로 레이아웃 결정. `EXPANDED_MIN_WIDTH`(600dp) 이상 = 폴드 펼침(기본은 달력 전체, 오른쪽 위 ✦« 로 비서·일정·설정 칸을 사이드바처럼 열고 닫음), 미만 = 아래 탭(폰·폴드 커버) |
 | `index.js` | 앱 등록 + 안드로이드 위젯 작업 처리기 등록 |
 | `src/core/` | **플랫폼 공통 순수 로직** (React·Node 기능 없음). PC 버전과 규칙이 같아야 한다 |
 | ├ `dates.js` `convert.js` | 날짜 도우미, AI 항목↔일정 변환, 알림 기본값, 중복 판별, 저장 전 검사 |
@@ -20,7 +20,7 @@ Expo SDK 57 / React Native 0.86. 데이터의 원본은 폰 안(AsyncStorage)이
 | `src/services/sync.js` | 로그인 상태 + 실시간 구독 + 올리기. `firebase.native.js`(폰: AsyncStorage 로그인 유지, long polling) / `firebase.js`(웹 미리보기) |
 | `src/services/backgroundSync.js` | 앱이 꺼져 있을 때 약 15분마다 서버 확인 → 알림·위젯 갱신 (expo-background-task) |
 | `src/services/` | `feeds.js`(iCal 받기·캐시), `notifications.js`(알림 예약), `files.js`(문서·사진·촬영·녹음 → 파일 객체) |
-| `src/ui/` | `MonthView` `DayList` `EventEditor` `AssistantScreen` `SettingsScreen` `common`(버튼·입력·날짜 선택) `theme` |
+| `src/ui/` | `MonthView` `DayList` `EventEditor` `QuickPrompt`(달력 아래 글·말 빠른 입력) `AssistantScreen` `SettingsScreen` `common`(버튼·입력·날짜 선택) `theme` |
 | `src/widget/` | 홈 화면 위젯(react-native-android-widget). 앱이 꺼져 있어도 AsyncStorage에서 직접 읽어 그린다 |
 | `test/` | `npm test`(핵심 로직), `fixtures/`(샘플 HWP·HWPX·DOCX) |
 

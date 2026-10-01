@@ -182,10 +182,60 @@ async function analyzeFile(file, opts) {
   return { fileName: file.name, kind, provider, note, ...parseJson(raw) };
 }
 
+// 빠른 입력(달력 아래 칸): 사용자가 직접 적거나 말한 요청 → 일정 후보
+function buildCommandPrompt({ about, text, voice, now = new Date() }) {
+  return `당신은 사용자의 일정 관리 비서입니다. 사용자: ${about || '학교 교사'}.
+${voice ? '첨부한 음성은 사용자가 캘린더에 일정을 넣어 달라고 직접 말한 것입니다. 먼저 말한 내용을 그대로 받아 적어 summary에 넣으세요.' : `아래는 사용자가 캘린더에 넣어 달라고 직접 입력한 요청입니다.\n<요청>\n${text}\n</요청>`}
+요청에서 캘린더에 넣을 일정·할 일·마감을 찾아 주세요.
+
+오늘은 ${ymd(now.getTime())} (${DOW[now.getDay()]}요일), 한국 시간 ${pad(now.getHours())}:${pad(now.getMinutes())}입니다.
+
+규칙
+- date는 반드시 YYYY-MM-DD 절대 날짜. "내일", "다음 주 화요일", "이번 달 말" 같은 표현은 오늘을 기준으로 계산하고 요일이 맞는지 검산하세요.
+- 연도가 없으면 오늘 이후 가장 가까운 해당 날짜로 봅니다.
+- 날짜를 알 수 없으면 items에 넣지 말고 undated에 넣으세요. 날짜를 지어내지 마세요.
+- time은 시각이 있을 때만 HH:mm(24시간). "오후 3시"는 15:00, 시각이 없으면 빈 문자열. "3시"처럼 오전·오후가 없으면 학교 일과 기준(1~6시는 오후)으로 판단하세요.
+- 여러 날 이어지는 일정은 date(시작)와 endDate(끝)를 모두 채우세요. "매주" 같은 반복은 앞으로 4번까지만 각각 항목으로 만드세요.
+- kind: 참석·행사 등은 "일정", 해야 할 업무는 "할 일", 제출·신청·납부 기한은 "마감".
+- title은 20자 이내로 구체적으로. 장소는 location, 준비물·대상 등은 memo에 짧게.
+- evidence에는 근거가 된 요청 속 표현을 40자 이내로. confidence는 0~1.
+- summary는 ${voice ? '받아 적은 말 그대로' : '한 문장 요약'}.
+- 일정 추가와 관계없는 말(인사, 질문 등)만 있으면 items를 비우고 summary에 짧게 답하세요.
+
+출력은 아래 JSON 형식만:
+{"summary": "...", "items": [{"title": "", "kind": "일정|할 일|마감", "date": "YYYY-MM-DD", "endDate": "", "time": "", "endTime": "", "location": "", "memo": "", "evidence": "", "confidence": 0.9}], "undated": [{"title": "", "note": ""}]}`;
+}
+
+/** 빠른 입력. text(글) 또는 audio(녹음 file 객체) 중 하나. opts는 analyzeFile과 같다. 녹음은 Gemini 키가 필요하다. */
+async function analyzeCommand({ text, audio }, opts) {
+  const { fetch: fetchFn, keys, onStage } = opts;
+  text = String(text || '').trim();
+  if (!text && !audio) throw new Error('내용을 입력하세요');
+  let provider = opts.provider === 'claude' ? 'claude' : 'gemini';
+  if (audio) {
+    if (!keys.gemini) throw new Error('말로 입력하려면 Gemini API 키가 필요합니다 (설정 → AI 비서). 키보드의 🎤 받아쓰기로 글자를 입력해도 됩니다');
+    provider = 'gemini';
+  }
+  if (!keys[provider]) {
+    const other = provider === 'gemini' ? 'claude' : 'gemini';
+    if (keys[other]) provider = other; else throw new Error('API 키가 없습니다. 설정 → AI 비서에서 키를 입력하세요');
+  }
+  const prompt = buildCommandPrompt({ about: opts.about, text, voice: !!audio });
+  onStage?.(audio ? '말을 듣고 분석 중' : '분석 중');
+  let raw;
+  if (provider === 'gemini') {
+    const parts = audio ? [await geminiFilePart(fetchFn, keys.gemini, audio, kindOf(audio.ext).mime || 'audio/mp4', onStage), { text: prompt }] : [{ text: prompt }];
+    raw = await geminiGenerate(fetchFn, keys.gemini, opts.geminiModel, parts);
+  } else {
+    raw = await claudeGenerate(fetchFn, keys.claude, opts.claudeModel, [{ type: 'text', text: prompt }]);
+  }
+  return { fileName: '', kind: audio ? 'voice' : 'prompt', provider, note: '', ...parseJson(raw) };
+}
+
 async function testKey(provider, { fetch: fetchFn, key, geminiModel, claudeModel }) {
   if (provider === 'gemini') await geminiGenerate(fetchFn, key, geminiModel, [{ text: '"ok"라고만 답하세요.' }], false);
   else await claudeGenerate(fetchFn, key, claudeModel, [{ type: 'text', text: '"ok"라고만 답하세요.' }]);
   return true;
 }
 
-module.exports = { analyzeFile, testKey, kindOf, parseJson, buildPrompt };
+module.exports = { analyzeFile, analyzeCommand, testKey, kindOf, parseJson, buildPrompt, buildCommandPrompt };
