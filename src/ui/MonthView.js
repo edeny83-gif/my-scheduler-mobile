@@ -2,14 +2,13 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, Text, View } from 'react-native';
 import { buildMonth, holidayMap } from '../core/monthLayout';
-import { DOW, ymd, hm, sod, addMonths, monthStart } from '../core/dates';
+import { DOW, ymd, sod, addMonths, monthStart } from '../core/dates';
 
 export default function MonthView({ t, view, setView, selected, onSelectDay, onAddDay, onOpenItem, items, holidays, settings, onHeaderAction, compactHeader, syncPhase }) {
   const month = useMemo(() => buildMonth(view, items, { maxLanes: settings.maxLanes ?? 3 }), [view, items, settings.maxLanes]);
   const hol = useMemo(() => holidayMap(holidays, settings.holidays?.observances), [holidays, settings.holidays?.observances]);
   const [weekH, setWeekH] = useState(0);
   const [gridW, setGridW] = useState(0);
-  const showTime = gridW / 7 >= 88; // 칸이 좁으면(폰) 시간을 빼고 제목을 보여준다
   const todayKey = ymd(Date.now());
 
   // 좌우로 밀어서 달 이동
@@ -78,7 +77,7 @@ export default function MonthView({ t, view, setView, selected, onSelectDay, onA
                     <View style={{ paddingHorizontal: 4, opacity: other ? 0.45 : 1 }}>
                       {show.map((e) => (
                         <Text key={e.id} numberOfLines={1} onPress={() => onOpenItem(e)} style={{ height: lineH, fontSize: t.fs(11), lineHeight: lineH, fontFamily: t.font, color: evColor(e) }}>
-                          {e.allDay || !showTime ? '' : <Text style={{ opacity: 0.75 }}>{hm(e.start)} </Text>}{e.title}
+                          {'· '}{e.title}
                         </Text>
                       ))}
                       {more > 0 ? <Text numberOfLines={1} style={{ fontSize: t.fs(10.5), lineHeight: lineH, color: t.c.muted, fontFamily: t.font }}>+{more}</Text> : null}
