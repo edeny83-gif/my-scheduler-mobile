@@ -1,4 +1,4 @@
-// 빠른 입력: 달력 아래 칸에 글로 적거나 말하면 AI가 알아듣고 바로 일정에 넣는다 (되돌리기 가능)
+// 빠른 입력: 달력 아래 칸에 글로 적거나 말하면 AI가 알아듣고 바로 일정에 넣거나 지운다 (되돌리기 가능)
 import React, { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
@@ -15,6 +15,11 @@ const label = (it) => {
   return `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})${tm} ${it.title}`;
 };
 
+const evLabel = (e) => {
+  const d = new Date(e.start);
+  return `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})${e.allDay ? '' : ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`} ${e.title}`;
+};
+
 export default function QuickPrompt({ t, settings, onShowDay, onGoSettings }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState('');                // 진행 중 문구
@@ -26,21 +31,24 @@ export default function QuickPrompt({ t, settings, onShowDay, onGoSettings }) {
     setBusy('분석 중'); setRes(null);
     try {
       const keys = await getKeys();
-      const r = await analyzeCommand(input, {
+      const existing = store.list();
+      const r = await analyzeCommand({ ...input, events: existing }, {
         fetch, keys, provider: settings.ai.provider, geminiModel: settings.ai.geminiModel, claudeModel: settings.ai.claudeModel,
         about: settings.ai.about, onStage: setBusy,
       });
-      const existing = store.list();
+      // 지우기 요청: AI가 고른 id 중 실제로 있는 내 일정만 지운다(외부 캘린더는 대상 아님)
+      const removed = [...new Set(r.deletes || [])].map((id) => store.get(id)).filter(Boolean);
+      if (removed.length) store.remove(removed.map((e) => e.id));
       const ok = [], skipped = [];
       for (const it of r.items) {
         try {
           const ev = itemToEvent(it, { color: settings.ai.color, source: 'ai' });
-          const dup = findDuplicate(ev, existing);
+          const dup = findDuplicate(ev, existing) || findDuplicate(ev, ok.map((x) => x.ev));
           if (dup) skipped.push(`${label(it)} — 이미 있음`); else ok.push({ it, ev });
         } catch (e) { skipped.push(`${it.title || '?'} — ${e.message}`); }
       }
       const added = ok.length ? await store.addMany(ok.map((x) => x.ev)) : [];
-      setRes({ added: added.map((a, i) => ({ id: a.id, item: ok[i].it })), skipped, undated: r.undated || [], summary: r.summary, voice: !!input.audio });
+      setRes({ added: added.map((a, i) => ({ id: a.id, item: ok[i].it })), removed, skipped, undated: r.undated || [], summary: r.summary, voice: !!input.audio });
       if (input.text) setText('');
     } catch (e) {
       setRes({ error: e.message, noKey: /API 키/.test(e.message) });
@@ -68,8 +76,9 @@ export default function QuickPrompt({ t, settings, onShowDay, onGoSettings }) {
     run({ audio: fromRecording(recorder.uri, dur) });
   };
   const undo = async () => {
-    await store.remove(res.added.map((a) => a.id));
-    setRes({ ...res, added: [], undone: res.added.length });
+    if (res.added.length) store.remove(res.added.map((a) => a.id));
+    if (res.removed?.length) store.addMany(res.removed.map(({ id, createdAt, updatedAt, deleted, ...e }) => e)); // 지운 일정 되살리기
+    setRes({ ...res, added: [], removed: [], undone: res.added.length + (res.removed?.length || 0) });
   };
 
   const recording = rec.isRecording;
@@ -88,13 +97,16 @@ export default function QuickPrompt({ t, settings, onShowDay, onGoSettings }) {
               {res.added.map((a) => (
                 <Text key={a.id} style={{ ...small, color: t.c.ok }} onPress={() => onShowDay?.(parseYmd(a.item.date))} accessibilityRole="link">✓ {label(a.item)}</Text>
               ))}
+              {(res.removed || []).map((e) => (
+                <Text key={`d${e.id}`} style={{ ...small, color: t.c.danger }} onPress={() => onShowDay?.(e.start)} accessibilityRole="link">🗑 지움: {evLabel(e)}</Text>
+              ))}
               {res.skipped.map((s, i) => <Text key={`s${i}`} style={small}>– {s}</Text>)}
               {res.undated.map((u, i) => <Text key={`u${i}`} style={{ ...small, color: t.c.warn }}>? 날짜를 몰라 넣지 못함: {u.title}</Text>)}
               {res.undone ? <Text style={small}>{res.undone}개를 되돌렸습니다.</Text> : null}
-              {!res.added.length && !res.skipped.length && !res.undated.length && !res.undone
+              {!res.added.length && !res.removed?.length && !res.skipped.length && !res.undated.length && !res.undone
                 ? <Text style={small}>넣을 일정을 찾지 못했습니다.{res.summary && !res.voice ? ` (${res.summary})` : ''}</Text> : null}
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16 }}>
-                {res.added.length ? <Text style={{ ...small, color: t.c.accent, paddingVertical: 4 }} onPress={undo} accessibilityRole="button">되돌리기</Text> : null}
+                {res.added.length || res.removed?.length ? <Text style={{ ...small, color: t.c.accent, paddingVertical: 4 }} onPress={undo} accessibilityRole="button">되돌리기</Text> : null}
                 <Text style={{ ...small, paddingVertical: 4 }} onPress={() => setRes(null)} accessibilityRole="button">닫기</Text>
               </View>
             </>
@@ -104,7 +116,7 @@ export default function QuickPrompt({ t, settings, onShowDay, onGoSettings }) {
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
         <TextInput
           value={recording ? '' : text} onChangeText={setText} editable={!recording && !busy}
-          placeholder={recording ? `듣는 중… ${sec}초 (다시 누르면 끝)` : busy ? `${busy}…` : '✦ 예: 다음 주 화요일 3시 학부모 상담'}
+          placeholder={recording ? `듣는 중… ${sec}초 (다시 누르면 끝)` : busy ? `${busy}…` : '✦ 예: 내일 3시 상담 / 7일 연극 지워 줘'}
           placeholderTextColor={recording ? t.c.danger : t.c.faint}
           multiline returnKeyType="send" submitBehavior="submit" onSubmitEditing={send}
           accessibilityLabel="일정 빠른 입력"

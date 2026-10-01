@@ -72,12 +72,17 @@ export default function AssistantScreen({ t, settings, onGoSettings, onShowDay, 
     }
     const existing = store.list();
     const today = sod(Date.now());
+    // 같은 문서를 HWP·PDF로 함께 올린 경우처럼, 이번에 분석한 파일들끼리도 같은 일정은 하나만 고른다
+    const batch = [];
     for (const r of out) {
       r.items = r.items.map((it) => {
         try {
           const ev = itemToEvent(it, { fileName: r.fileName });
           const dup = findDuplicate(ev, existing);
-          const x = { ...it, fileName: r.fileName, past: (ev.end ?? ev.start) < today, duplicate: dup ? dup.title : '' };
+          const twin = dup ? null : findDuplicate(ev, batch);
+          if (!dup && !twin) batch.push({ ...ev, fileName: r.fileName });
+          const x = { ...it, fileName: r.fileName, past: (ev.end ?? ev.start) < today,
+            duplicate: dup ? dup.title : twin ? `${twin.title} (${twin.fileName}에서 이미 찾음)` : '' };
           x.checked = !x.past && !x.duplicate && (x.confidence ?? 1) >= settings.ai.minConfidence;
           return x;
         } catch (e) { return { ...it, invalid: e.message, checked: false }; }
@@ -89,14 +94,24 @@ export default function AssistantScreen({ t, settings, onGoSettings, onShowDay, 
   };
 
   const addSelected = async (rs = results, auto = false) => {
-    const sel = rs.flatMap((r) => r.items.filter((it) => it.checked && !it.added));
-    if (!sel.length) return;
+    const picked = rs.flatMap((r) => r.items.filter((it) => it.checked && !it.added));
+    if (!picked.length) return;
+    // 넣기 직전에 한 번 더: 캘린더에 이미 있거나, 고른 것끼리 같은 일정은 하나만 넣는다
+    const have = store.list();
+    const sel = [], evs = [];
+    for (const it of picked) {
+      const ev = itemToEvent(it, { color: settings.ai.color, source: 'ai', fileName: it.fileName });
+      if (findDuplicate(ev, have) || findDuplicate(ev, evs)) { it.checked = false; it.duplicate = it.duplicate || '이미 넣은 일정'; continue; }
+      sel.push(it); evs.push(ev);
+    }
+    const skipped = picked.length - sel.length;
+    if (!sel.length) { setResults([...rs]); setMsg(`겹치는 일정 ${skipped}개는 넣지 않았습니다.`); return; }
     try {
-      const added = await store.addMany(sel.map((it) => itemToEvent(it, { color: settings.ai.color, source: 'ai', fileName: it.fileName })));
+      const added = await store.addMany(evs);
       sel.forEach((it) => { it.added = true; it.checked = false; });
       setResults([...rs]);
       setLastAdded((x) => [...x, ...added.map((a) => a.id)]);
-      setMsg(`${auto ? '자동으로 ' : ''}${added.length}개를 캘린더에 추가했습니다.`);
+      setMsg(`${auto ? '자동으로 ' : ''}${added.length}개를 캘린더에 추가했습니다.${skipped ? ` (겹치는 ${skipped}개는 뺐습니다)` : ''}`);
       notifyNow(`AI 비서가 일정 ${added.length}개를 추가했습니다`, sel.slice(0, 3).map((it) => `${it.date.slice(5).replace('-', '/')} ${it.title}`).join('\n'));
     } catch (e) { setMsg(`추가하지 못했습니다: ${e.message}`); }
   };
