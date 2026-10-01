@@ -1,8 +1,9 @@
 // 화면 폭에 따라 자동으로 바뀐다
 //  - 좁은 화면(일반 폰, 폴드 커버 화면): 달력+목록 / 비서 / 설정 을 아래 탭으로
-//  - 넓은 화면(폴드7 펼침, 태블릿, 가로 모드 600dp 이상): 왼쪽 달력 + 오른쪽 칸(일정·비서·설정·입력)
+//  - 넓은 화면(폴드7 펼침, 태블릿, 가로 모드 600dp 이상): 기본은 달력만 꽉 차게. 오른쪽 위 « 를 누르면
+//    오른쪽 칸(일정·비서·설정)이 사이드바처럼 나온다. 일정 편집 중에는 자동으로 열린다
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Linking, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Keyboard, LayoutAnimation, Linking, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAppState } from './src/state';
@@ -39,7 +40,9 @@ function Main() {
   const [view, setView] = useState(() => monthStart(Date.now()));
   const [selected, setSelected] = useState(() => sod(Date.now()));
   const [tab, setTab] = useState('calendar');          // 좁은 화면: calendar | assistant | settings
-  const [pane, setPane] = useState('day');             // 넓은 화면 오른쪽 칸: day | assistant | settings
+  const [pane, setPane] = useState('assistant');       // 넓은 화면 오른쪽 칸: day | assistant | settings
+  const [side, setSideRaw] = useState(false);          // 넓은 화면 오른쪽 칸 보이기 (기본: 숨김 → 달력 전체)
+  const setSide = (v) => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setSideRaw(v); };
   const [editor, setEditor] = useState(null);          // { item?, day? }
   const [assistAction, setAssistAction] = useState(null);
 
@@ -56,7 +59,8 @@ function Main() {
 
   const items = useMemo(() => [...app.events, ...app.external], [app.events, app.external]);
   const goDay = (ms) => { setSelected(sod(ms)); setView(monthStart(ms)); setTab('calendar'); setPane('day'); };
-  const openAssistant = (action = null) => { setAssistAction(action); setTab('assistant'); setPane('assistant'); setEditor(null); };
+  const openAssistant = (action = null) => { setAssistAction(action); setTab('assistant'); setPane('assistant'); setSide(true); setEditor(null); };
+  const goSettings = () => { setTab('settings'); setPane('settings'); setSide(true); };
 
   useEffect(() => {
     setupNotifications();
@@ -83,7 +87,7 @@ function Main() {
   ) : null;
   const syncBanner = app.sync.phase === 'signed-out' && !app.settings.syncPromptDismissed ? (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginTop: 6, paddingVertical: 4, paddingLeft: 12, borderRadius: 10, backgroundColor: t.c.panel2 }}>
-      <Pressable onPress={() => { setTab('settings'); setPane('settings'); }} accessibilityRole="button" style={{ flex: 1, paddingVertical: 8 }}>
+      <Pressable onPress={goSettings} accessibilityRole="button" style={{ flex: 1, paddingVertical: 8 }}>
         <Text style={{ color: t.c.text, fontSize: t.fs(13), fontFamily: t.font }}>☁ PC와 동기화하려면 로그인하세요 ›</Text>
       </Pressable>
       <Pressable onPress={() => settingsStore.update({ syncPromptDismissed: true })} hitSlop={10} accessibilityRole="button" accessibilityLabel="안내 닫기" style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
@@ -96,10 +100,16 @@ function Main() {
     <MonthView
       t={t} view={view} setView={setView} selected={selected} items={items} holidays={app.holidays} settings={app.settings}
       compactHeader={!expanded && height < 700} syncPhase={app.sync.phase}
-      onSelectDay={(d) => { setSelected(d); if (expanded) { setPane('day'); setEditor(null); } }}
+      onSelectDay={(d) => { setSelected(d); if (expanded && side) { setPane('day'); setEditor(null); } }}
       onAddDay={(d) => { setSelected(d); setEditor({ day: d }); }}
       onOpenItem={(e) => setEditor({ item: e })}
-      onHeaderAction={expanded ? null : (
+      onHeaderAction={expanded ? (
+        <Pressable onPress={() => (side ? setSide(false) : openAssistant())} accessibilityRole="button" accessibilityLabel={side ? 'AI 비서 칸 닫기' : 'AI 비서 칸 열기'} hitSlop={6}
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', marginLeft: 6, paddingHorizontal: 12, minHeight: 44, borderRadius: 10, backgroundColor: pressed || side ? t.c.panel2 : t.c.panel })}>
+          <Text style={{ color: t.c.warn, fontSize: t.fs(16) }}>✦</Text>
+          <Text style={{ color: t.c.text, fontSize: t.fs(20), marginLeft: 6 }}>{side ? '»' : '«'}</Text>
+        </Pressable>
+      ) : (
         <Pressable onPress={() => openAssistant()} accessibilityLabel="AI 비서" hitSlop={6} style={{ paddingHorizontal: 10, paddingVertical: 8 }}>
           <Text style={{ color: t.c.warn, fontSize: t.fs(18) }}>✦</Text>
         </Pressable>
@@ -110,22 +120,24 @@ function Main() {
     <DayList t={t} day={selected} items={items} holidays={app.holidays} settings={app.settings}
       onOpenItem={(e) => setEditor({ item: e })} onAdd={() => setEditor({ day: selected })} style={{ flex: 1 }} />
   );
-  const assistant = <AssistantScreen t={t} settings={app.settings} initialAction={assistAction} onGoSettings={() => { setTab('settings'); setPane('settings'); }} onShowDay={() => goDay(selected)} />;
-  const quick = <QuickPrompt t={t} settings={app.settings} onShowDay={goDay} onGoSettings={() => { setTab('settings'); setPane('settings'); }} />;
+  const assistant = <AssistantScreen t={t} settings={app.settings} initialAction={assistAction} onGoSettings={goSettings} onShowDay={() => goDay(selected)} />;
+  const quick = <QuickPrompt t={t} settings={app.settings} onShowDay={goDay} onGoSettings={goSettings} />;
   const settingsView = <SettingsScreen t={t} s={app.settings} feedStatus={app.feedStatus} syncState={app.sync} />;
 
   // ---------------- 넓은 화면 (폴드7 펼침) ----------------
   if (expanded) {
     const tabs = [['day', '일정'], ['assistant', '✦ 비서'], ['settings', '설정']];
+    const showSide = side || !!editor;
     return (
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.c.bg, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, kbPad), paddingLeft: insets.left, paddingRight: insets.right }}>
         <StatusBar style="light" />
-        <View style={{ flex: width < 900 ? 1.65 : 1.4, paddingTop: 10, paddingHorizontal: 8, paddingBottom: 4 }}>
+        <View style={{ flex: width < 900 ? 1.3 : 1.4, paddingTop: 10, paddingHorizontal: 8, paddingBottom: 4 }}>
+          {!showSide && <View style={{ paddingBottom: 6 }}>{updateBanner}{syncBanner}</View>}
           <View style={{ flex: 1 }}>{month}</View>
           <View style={{ paddingHorizontal: 4 }}>{quick}</View>
         </View>
-        <View style={{ width: 1, backgroundColor: t.c.line }} />
-        <View style={{ flex: 1 }}>
+        {showSide && <View style={{ width: 1, backgroundColor: t.c.line }} />}
+        {showSide && <View style={{ flex: 1 }}>
           {updateBanner}{syncBanner}
           {editor ? (
             <EventEditor key={editor.item?.id || `new-${editor.day}`} t={t} item={editor.item} day={editor.day} onClose={closeEditor} embedded />
@@ -146,7 +158,7 @@ function Main() {
               </View>
             </>
           )}
-        </View>
+        </View>}
       </View>
     );
   }
