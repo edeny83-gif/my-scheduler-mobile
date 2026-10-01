@@ -15,7 +15,7 @@ import AssistantScreen from './src/ui/AssistantScreen';
 import SettingsScreen from './src/ui/SettingsScreen';
 import QuickPrompt from './src/ui/QuickPrompt';
 import { setupNotifications, onNotificationOpen } from './src/services/notifications';
-import { sod, monthStart } from './src/core/dates';
+import { sod, monthStart, parseYmd } from './src/core/dates';
 import { settings as settingsStore } from './src/storage/settings';
 import { useAppUpdate } from './src/services/appUpdate';
 
@@ -65,10 +65,12 @@ function Main() {
   useEffect(() => {
     setupNotifications();
     const off = onNotificationOpen(goDay);
-    // 위젯의 ＋ / ✦ 버튼 (myscheduler://add, myscheduler://assistant)
+    // 위젯의 ＋ / ✦ 버튼 (myscheduler://add, myscheduler://assistant), 두 번 누르기 (myscheduler://day/YYYY-MM-DD)
     const handle = (url) => {
       if (!url) return;
-      if (url.includes('://add')) setEditor({ day: sod(Date.now()) });
+      const m = url.match(/:\/\/day\/(\d{4}-\d{2}-\d{2})/);   // 위젯을 두 번 눌러 그 날짜로 열기
+      if (m && parseYmd(m[1]) != null) goDay(parseYmd(m[1]));
+      else if (url.includes('://add')) setEditor({ day: sod(Date.now()) });
       else if (url.includes('://assistant')) openAssistant();
     };
     Linking.getInitialURL().then(handle);

@@ -21,7 +21,7 @@ Expo SDK 57 / React Native 0.86. 데이터의 원본은 폰 안(AsyncStorage)이
 | `src/services/backgroundSync.js` | 앱이 꺼져 있을 때 약 15분마다 서버 확인 → 알림·위젯 갱신 (expo-background-task) |
 | `src/services/` | `feeds.js`(iCal 받기·캐시), `notifications.js`(알림 예약), `files.js`(문서·사진·촬영·녹음 → 파일 객체) |
 | `src/ui/` | `MonthView` `DayList` `EventEditor` `QuickPrompt`(달력 아래 글·말 빠른 입력) `AssistantScreen` `SettingsScreen` `common`(버튼·입력·날짜 선택) `theme` |
-| `src/widget/` | 홈 화면 위젯(react-native-android-widget). 앱이 꺼져 있어도 AsyncStorage에서 직접 읽어 그린다 |
+| `src/widget/` | 홈 화면 위젯(react-native-android-widget). 앱이 꺼져 있어도 AsyncStorage에서 직접 읽어 그린다. 아래 목록 = 선택한 날(기본 오늘, `state.js`에 30분 기억). 날짜 누르기 = SELECT_DAY, 누른 뒤 1.5초 안에 한 번 더 = 앱을 그 날짜로 열기(myscheduler://day/YYYY-MM-DD) |
 | `test/` | `npm test`(핵심 로직), `fixtures/`(샘플 HWP·HWPX·DOCX) |
 
 ## 데이터 모델 (PC와 동일)

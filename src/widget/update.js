@@ -11,10 +11,11 @@ export function updateWidget() {
       const { requestWidgetUpdate } = require('react-native-android-widget');
       const { CalendarWidget } = require('./CalendarWidget');
       const { loadWidgetData } = require('./load');
+      const { selectedDay } = require('./state');
       const data = await loadWidgetData();
       await requestWidgetUpdate({
         widgetName: 'Calendar',
-        renderWidget: (info) => <CalendarWidget {...data} width={info.width} height={info.height} />,
+        renderWidget: async (info) => <CalendarWidget {...data} day={await selectedDay(info.widgetId)} width={info.width} height={info.height} />,
       });
     } catch (e) { console.warn('위젯 갱신 실패', e); }
   }, 400);
