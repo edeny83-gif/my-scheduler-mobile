@@ -73,13 +73,29 @@ function errorMessage(status, body) {
   if (status === 401 || status === 403) return `API 키 인증 실패 (${status})`;
   if (status === 404) return '모델을 찾을 수 없습니다. 설정에서 모델 이름을 확인하세요';
   if (status === 429) return '사용 한도를 넘었습니다. 잠시 후 다시 시도하세요';
+  if (BUSY.has(status)) return 'AI 서버가 지금 붐빕니다. 잠시 뒤 다시 눌러 주세요 (입력한 글은 그대로 남아 있습니다)';
   return `HTTP ${status}: ${String(msg).slice(0, 300)}`;
 }
 async function ensureOk(res) {
   if (res.ok) return res;
   let body = '';
   try { body = await res.text(); } catch {}
-  throw new Error(errorMessage(res.status, body));
+  const err = new Error(errorMessage(res.status, body));
+  err.status = res.status;
+  throw err;
+}
+
+// AI 서버가 붐빌 때(503 등) 잠깐 기다렸다 다시 시도. 시험에서는 RETRY.ms를 [0, 0]으로 바꾼다
+const BUSY = new Set([500, 502, 503, 504, 529]);
+const RETRY = { ms: [1500, 4000] };
+async function withRetry(fn, onStage) {
+  for (let i = 0; ; i++) {
+    try { return await fn(); } catch (e) {
+      if (!BUSY.has(e.status) || i >= RETRY.ms.length) throw e;
+      onStage?.(`AI 서버가 붐벼 다시 시도 중 (${i + 1}/${RETRY.ms.length})`);
+      await new Promise((r) => setTimeout(r, RETRY.ms[i]));
+    }
+  }
 }
 
 async function geminiUpload(fetchFn, key, file, mime) {
@@ -105,15 +121,15 @@ async function geminiUpload(fetchFn, key, file, mime) {
   return f;
 }
 
-async function geminiGenerate(fetchFn, key, model, parts, json = true) {
-  const res = await ensureOk(await fetchFn(`${GEMINI}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+async function geminiGenerate(fetchFn, key, model, parts, json = true, onStage) {
+  const res = await withRetry(async () => ensureOk(await fetchFn(`${GEMINI}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts }],
       generationConfig: json ? { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.2 } : { temperature: 0.2 },
     }),
-  }));
+  })), onStage);
   const data = await res.json();
   const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
   if (!text) throw new Error(`AI가 빈 응답을 보냈습니다 (${data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || '이유 없음'})`);
@@ -127,12 +143,12 @@ async function geminiFilePart(fetchFn, key, file, mime, onStage) {
   return { file_data: { mime_type: f.mimeType || mime, file_uri: f.uri } };
 }
 
-async function claudeGenerate(fetchFn, key, model, content) {
-  const res = await ensureOk(await fetchFn(ANTHROPIC, {
+async function claudeGenerate(fetchFn, key, model, content, onStage) {
+  const res = await withRetry(async () => ensureOk(await fetchFn(ANTHROPIC, {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model, max_tokens: 8000, system: '당신은 일정 추출 비서입니다. 요청한 JSON 형식만 출력하세요.', messages: [{ role: 'user', content }] }),
-  }));
+  })), onStage);
   const data = await res.json();
   return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
 }
@@ -164,7 +180,7 @@ async function analyzeFile(file, opts) {
   let raw;
   if (provider === 'gemini') {
     const parts = [extracted ? { text: `<문서 내용 "${file.name}">\n${extracted.text}\n</문서 내용>` } : await geminiFilePart(fetchFn, keys.gemini, file, mime, onStage), { text: prompt }];
-    raw = await geminiGenerate(fetchFn, keys.gemini, opts.geminiModel, parts);
+    raw = await geminiGenerate(fetchFn, keys.gemini, opts.geminiModel, parts, true, onStage);
   } else {
     const content = [];
     if (extracted) content.push({ type: 'text', text: `<문서 내용 "${file.name}">\n${extracted.text}\n</문서 내용>` });
@@ -177,7 +193,7 @@ async function analyzeFile(file, opts) {
         : { type: 'image', source: { type: 'base64', media_type: mime, data } });
     }
     content.push({ type: 'text', text: prompt });
-    raw = await claudeGenerate(fetchFn, keys.claude, opts.claudeModel, content);
+    raw = await claudeGenerate(fetchFn, keys.claude, opts.claudeModel, content, onStage);
   }
   return { fileName: file.name, kind, provider, note, ...parseJson(raw) };
 }
@@ -225,9 +241,17 @@ async function analyzeCommand({ text, audio }, opts) {
   let raw;
   if (provider === 'gemini') {
     const parts = audio ? [await geminiFilePart(fetchFn, keys.gemini, audio, kindOf(audio.ext).mime || 'audio/mp4', onStage), { text: prompt }] : [{ text: prompt }];
-    raw = await geminiGenerate(fetchFn, keys.gemini, opts.geminiModel, parts);
+    try {
+      raw = await geminiGenerate(fetchFn, keys.gemini, opts.geminiModel, parts, true, onStage);
+    } catch (e) {
+      // Gemini가 계속 붐비면 Claude 키가 있을 때 글 요청은 Claude로 대신 보낸다
+      if (!BUSY.has(e.status) || audio || !keys.claude) throw e;
+      onStage?.('Gemini가 붐벼 Claude로 분석 중');
+      provider = 'claude';
+      raw = await claudeGenerate(fetchFn, keys.claude, opts.claudeModel, [{ type: 'text', text: prompt }], onStage);
+    }
   } else {
-    raw = await claudeGenerate(fetchFn, keys.claude, opts.claudeModel, [{ type: 'text', text: prompt }]);
+    raw = await claudeGenerate(fetchFn, keys.claude, opts.claudeModel, [{ type: 'text', text: prompt }], onStage);
   }
   return { fileName: '', kind: audio ? 'voice' : 'prompt', provider, note: '', ...parseJson(raw) };
 }
@@ -238,4 +262,4 @@ async function testKey(provider, { fetch: fetchFn, key, geminiModel, claudeModel
   return true;
 }
 
-module.exports = { analyzeFile, analyzeCommand, testKey, kindOf, parseJson, buildPrompt, buildCommandPrompt };
+module.exports = { RETRY, analyzeFile, analyzeCommand, testKey, kindOf, parseJson, buildPrompt, buildCommandPrompt };

@@ -100,6 +100,18 @@ const ms = (y, m, d, h = 0, mi = 0) => new Date(y, m - 1, d, h, mi).getTime();
   await assert.rejects(ai.analyzeCommand({ audio: file('말.m4a', new Uint8Array([1])) }, { fetch: gem, keys: { claude: 'c' } }), /Gemini API 키/);
   await assert.rejects(ai.analyzeCommand({ text: '  ' }, { fetch: gem, keys: { gemini: 'g' } }), /내용을 입력/);
   ok('글→Gemini/Claude, 말→Gemini(키 없으면 안내), 빈 입력 거부');
+  ai.RETRY.ms = [0, 0];
+  let n = 0;
+  const busy = (times) => async (url, init) => {
+    if (url.includes('generativelanguage') && n++ < times) return { ok: false, status: 503, text: async () => '{"error":{"message":"This model is currently experiencing high demand."}}' };
+    return url.includes('anthropic') ? cla(url, init) : gem(url, init);
+  };
+  n = 0; const rb = await ai.analyzeCommand({ text: '상담' }, { fetch: busy(2), keys: { gemini: 'g' }, provider: 'gemini', geminiModel: 'gm' });
+  assert.ok(rb.items.length === 1 && n === 3);
+  n = 0; await assert.rejects(ai.analyzeCommand({ text: '상담' }, { fetch: busy(9), keys: { gemini: 'g' }, provider: 'gemini', geminiModel: 'gm' }), /붐빕니다/);
+  n = 0; const rf = await ai.analyzeCommand({ text: '상담' }, { fetch: busy(9), keys: { gemini: 'g', claude: 'c' }, provider: 'gemini', geminiModel: 'gm', claudeModel: 'cm' });
+  assert.strictEqual(rf.provider, 'claude');
+  ok('AI 서버가 붐비면(503) 두 번 다시 시도 → 그래도 안 되면 Claude로 대신, 없으면 쉬운 안내');
 
   console.log('\n모든 핵심 시험 통과');
 })().catch((e) => { console.error('\n실패:', e); process.exit(1); });
