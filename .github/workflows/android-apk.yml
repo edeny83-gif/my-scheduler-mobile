@@ -1,12 +1,17 @@
-# mobile-v0.2.0 같은 태그를 push하거나 Actions 탭에서 직접 실행하면 설치용 APK를 만든다.
-# 만들어진 APK는 Releases(태그일 때)와 실행 결과의 Artifacts에서 받을 수 있다.
+# app.json / package.json이 바뀌어 main에 병합되면(네이티브 구성이 바뀔 수 있음) 설치용 APK를 새로 빌드해
+# Releases의 "mobile-latest"에 올린다. 직접 실행(Actions 탭 → Run workflow)도 된다.
+# 화면·기능만 바뀐 수정은 APK가 필요 없다(무선 업데이트로 전달).
 name: Android APK
 on:
   push:
-    tags: ['mobile-v*']
+    branches: [main]
+    paths: ['app.json', 'package.json', 'package-lock.json']
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: android-apk
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,22 +27,28 @@ jobs:
           java-version: 17
       - run: npm ci
       - run: npm test
-      - name: 태그를 앱 버전으로
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: 빌드 번호(versionCode)
         run: |
-          V="${GITHUB_REF_NAME#mobile-v}"
-          node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('app.json'));j.expo.version=process.argv[1];j.expo.android.versionCode=Number(process.argv[2]);fs.writeFileSync('app.json',JSON.stringify(j,null,2))" "$V" "${{ github.run_number }}"
+          node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('app.json'));j.expo.android=j.expo.android||{};j.expo.android.versionCode=Number(process.argv[1]);fs.writeFileSync('app.json',JSON.stringify(j,null,2))" "${{ github.run_number }}"
       - name: 안드로이드 프로젝트 생성
         run: npx expo prebuild --platform android --no-install
       - name: APK 빌드
         run: cd android && ./gradlew assembleRelease --no-daemon
       - name: 파일 이름 정리
-        run: mv android/app/build/outputs/apk/release/app-release.apk "내캘린더-${GITHUB_REF_NAME}.apk"
+        run: |
+          echo "APP_VERSION=$(node -p "require('./app.json').expo.version")" >> "$GITHUB_ENV"
+          mv android/app/build/outputs/apk/release/app-release.apk MyCalendar.apk
       - uses: actions/upload-artifact@v4
         with:
           name: apk
-          path: "*.apk"
+          path: MyCalendar.apk
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: "*.apk"
+          tag_name: mobile-latest
+          target_commitish: ${{ github.sha }}
+          name: 내 캘린더 폰 앱 (최신 APK)
+          body: |
+            앱 버전 ${{ env.APP_VERSION }} · 빌드 ${{ github.run_number }}
+            이 APK는 새 폰에 처음 설치하거나, 앱 버전(version)이 바뀐 수정이 있을 때만 설치하면 됩니다.
+            그 밖의 수정은 앱을 켜면 자동으로 받습니다. 기존 앱 위에 그대로 설치하면 일정과 설정은 유지됩니다.
+          files: MyCalendar.apk

@@ -49,9 +49,22 @@ AsyncStorage `myscheduler.events.v1` = `{ version: 1, events: [...] }` — PC의
 4. `npx expo prebuild --platform android --no-install`로 매니페스트(권한·위젯·딥링크) 확인. 생성된 `android/`는 커밋하지 않는다.
 5. SDK 57 API는 설치된 `node_modules/*/build/*.d.ts`로 확인하고 쓴다(예: expo-file-system의 `File`, expo-audio의 `useAudioRecorder`, 알림 트리거 `SchedulableTriggerInputTypes.DATE`).
 
-## 배포
-`git tag mobile-vX.Y.Z && git push --tags` → Actions(`android-apk.yml`)가 APK를 만들어 Releases에 올림. Actions 탭에서 직접 실행해도 된다.
-서명은 Expo 기본 키(항상 같음)라 새 APK를 기존 앱 위에 설치할 수 있다. Play 스토어에 올릴 때는 별도 서명 키가 필요.
+## 배포 (자동)
+- `main`에 병합(push)되면:
+  - 화면·기능·버그 수정(JS 변경) → `mobile-update.yml`이 테스트 후 **무선 업데이트(EAS Update, 채널 production)** 를 게시한다. 폰 앱은 켜거나 다시 앞으로 올 때 확인해 받고 "새 버전을 받았습니다 — 눌러서 지금 적용" 배너를 띄운다. APK를 다시 설치할 필요가 없다.
+  - `app.json`·`package.json`·`package-lock.json`이 바뀌면 `android-apk.yml`이 APK를 새로 빌드해 Releases의 `mobile-latest`에 올린다(새 폰 설치용).
+- **무선 업데이트는 JS 코드만 바꿀 수 있다.** 새 권한·새 네이티브 패키지(expo-*, react-native-* 등)·app.json 플러그인을 바꾸면 반드시 `app.json`의 `expo.version`을 올린다(예: 0.3.0 → 0.4.0). `scripts/native-guard.js`가 병합 뒤 검사해서, 바뀌었는데 version이 그대로면 배포를 막는다. version을 올리면 새 APK를 폰에 한 번 설치해야 이후 업데이트를 받는다(runtimeVersion 정책이 appVersion이라 버전이 같은 설치본에만 업데이트가 간다).
+- 필요한 것: GitHub Secret `EXPO_TOKEN`, app.json의 `extra.eas.projectId`·`updates.url`(`eas update:configure`가 만든다). 없으면 업데이트 단계가 경고/실패로 알려 준다.
+
+## 클라우드(폰) 세션에서 수정을 요청받았을 때
+사용자는 교사이며, 폰의 Claude 앱 → Code 탭으로 "불편한 점"을 말로 요청한다. 다음을 지킨다.
+1. 이 CLAUDE.md와 관련 파일을 읽고, 이해한 요청을 한두 줄로 다시 말한다. 정말 애매할 때만 한 번 질문한다.
+2. 수정 후 `npm test`와 `npx expo export --platform android --output-dir /tmp/b`(코드 묶음이 만들어지는지)를 돌린다. 화면 변경은 웹 빌드 + Playwright 캡처로 확인한다. 이 환경에서는 실제 폰·홈 화면 위젯·알림·녹음을 확인할 수 없으니 **확인하지 못한 것은 솔직히 적는다.**
+3. `main`에 직접 push하지 않는다. 작업 브랜치로 PR을 만든다. PR 설명에 ① 무엇이 바뀌는지 ② 병합하면 폰에 언제 반영되는지(JS 변경: 앱을 켤 때 자동 / 네이티브 변경: version을 올렸고 APK 재설치 필요) ③ 확인하지 못한 위험 을 쉬운 말로 적는다. 병합은 사용자가 직접 한다.
+4. 새 권한이나 새 네이티브 패키지가 꼭 필요한 요청이면, 그 이유와 "APK를 새로 설치해야 한다"는 점을 먼저 알리고 `expo.version`을 올린다.
+5. 일정 저장·동기화 형식을 바꿀 때: 기존 필드는 이름·의미를 바꾸지 말고 **새 필드만 추가**한다(기기마다 버전이 다른 동안에도 일정이 깨지면 안 된다). `src/core/sync-core.js`를 고치면 PC 저장소(my-scheduler)의 `sync-core.js`도 똑같이 고쳐 PR을 만든다. 두 저장소가 함께 열린 세션이 아니면 사용자에게 알린다.
+6. 비밀값(API 키·비밀번호·토큰)을 코드·PR·커밋 메시지에 쓰지 않는다.
+7. 병합 뒤 문제가 생겨 "되돌려줘"라고 하면, 해당 PR을 되돌리는(revert) PR을 만든다.
 
 ## 다음 단계 후보
 - (완료) Firebase 동기화·로그인. 남은 것: 즉시 반영이 필요하면 Blaze 요금제 + Cloud Functions/FCM 푸시.

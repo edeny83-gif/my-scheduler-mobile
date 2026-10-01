@@ -15,6 +15,7 @@ import SettingsScreen from './src/ui/SettingsScreen';
 import { setupNotifications, onNotificationOpen } from './src/services/notifications';
 import { sod, monthStart } from './src/core/dates';
 import { settings as settingsStore } from './src/storage/settings';
+import { useAppUpdate } from './src/services/appUpdate';
 
 export const EXPANDED_MIN_WIDTH = 600;
 
@@ -28,6 +29,7 @@ export default function App() {
 
 function Main() {
   const app = useAppState();
+  const update = useAppUpdate();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const expanded = width >= EXPANDED_MIN_WIDTH;
@@ -62,6 +64,11 @@ function Main() {
     return <View style={{ flex: 1, backgroundColor: app.settings.colors.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#a8e0ff" /></View>;
   }
 
+  const updateBanner = update.pending ? (
+    <Pressable onPress={update.apply} accessibilityRole="button" style={{ marginHorizontal: 12, marginTop: 6, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, backgroundColor: t.c.accent }}>
+      <Text style={{ color: t.c.onAccent, fontSize: t.fs(13.5), fontWeight: '700', fontFamily: t.font }}>✨ 새 버전을 받았습니다 — 눌러서 지금 적용</Text>
+    </Pressable>
+  ) : null;
   const syncBanner = app.sync.phase === 'signed-out' && !app.settings.syncPromptDismissed ? (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginTop: 6, paddingVertical: 4, paddingLeft: 12, borderRadius: 10, backgroundColor: t.c.panel2 }}>
       <Pressable onPress={() => { setTab('settings'); setPane('settings'); }} accessibilityRole="button" style={{ flex: 1, paddingVertical: 8 }}>
@@ -103,7 +110,7 @@ function Main() {
         <View style={{ flex: width < 900 ? 1.65 : 1.4, paddingTop: 10, paddingHorizontal: 8, paddingBottom: 8 }}>{month}</View>
         <View style={{ width: 1, backgroundColor: t.c.line }} />
         <View style={{ flex: 1 }}>
-          {syncBanner}
+          {updateBanner}{syncBanner}
           {editor ? (
             <EventEditor key={editor.item?.id || `new-${editor.day}`} t={t} item={editor.item} day={editor.day} onClose={closeEditor} embedded />
           ) : (
@@ -133,7 +140,7 @@ function Main() {
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg, paddingTop: insets.top }}>
       <StatusBar style="light" />
-      {syncBanner}
+      {updateBanner}{syncBanner}
       <View style={{ flex: 1 }}>
         {tab === 'calendar' && (
           <View style={{ flex: 1, paddingTop: 8 }}>

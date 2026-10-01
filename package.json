@@ -1,6 +1,6 @@
 {
   "name": "my-scheduler-mobile",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "main": "index.js",
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -20,6 +20,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "expo-task-manager": "~57.0.21",
+    "expo-updates": "~57.0.24",
     "fflate": "^0.8.3",
     "firebase": "^12.19.0",
     "ical.js": "^1.5.0",
@@ -35,7 +36,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "node test/core.test.js && node test/sync.test.js",
+    "test": "node test/core.test.js && node test/sync.test.js && node test/guard.test.js",
     "web:build": "expo export --platform web",
     "android:bundle-check": "expo export --platform android --output-dir /tmp/bundle-check"
   },
