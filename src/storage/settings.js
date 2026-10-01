@@ -12,6 +12,7 @@ export const DEFAULTS = {
   holidays: { enabled: true, observances: false },
   google: { enabled: false, email: '', privateUrl: '', color: '#ffd28a' },
   calendars: [],
+  syncPromptDismissed: false,   // 동기화 로그인 안내 배너를 닫았는지
   ai: { provider: 'gemini', geminiModel: 'gemini-2.5-flash', claudeModel: 'claude-sonnet-5-5', about: '학교 교사', autoAdd: false, minConfidence: 0.6, color: '#ffd28a' },
 };
 

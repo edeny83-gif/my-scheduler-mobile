@@ -55,21 +55,6 @@ function findDuplicate(ev, events) {
   }) || null;
 }
 
-/** 저장 전 검사·정리 (PC store.js의 clean과 동일) */
-function cleanEvent(e) {
-  const title = String(e.title ?? '').trim();
-  if (!title) throw new Error('제목을 입력하세요');
-  const start = Number(e.start);
-  if (!Number.isFinite(start)) throw new Error('시작 시각이 올바르지 않습니다');
-  const end = e.end == null ? null : Number(e.end);
-  if (end != null && (!Number.isFinite(end) || end < start)) throw new Error('종료가 시작보다 빠릅니다');
-  return {
-    title, start, end, allDay: !!e.allDay,
-    location: String(e.location ?? ''), memo: String(e.memo ?? ''),
-    color: /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '',
-    remind: [...new Set((e.remind || []).map(Number).filter((n) => Number.isInteger(n) && n >= -1440 && n <= 40320))].sort((a, b) => a - b),
-    source: ['ai', 'claude-code'].includes(e.source) ? e.source : '',
-  };
-}
+const { clean: cleanEvent } = require('./sync-core'); // 저장 전 검사·정리 (PC와 동일)
 
 module.exports = { defaultRemind, itemToEvent, eventToItem, findDuplicate, cleanEvent };

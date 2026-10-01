@@ -1,6 +1,6 @@
 {
   "name": "my-scheduler-mobile",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "index.js",
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -8,6 +8,7 @@
     "cfb": "^1.2.2",
     "expo": "~57.0.26",
     "expo-audio": "~57.0.5",
+    "expo-background-task": "~57.0.21",
     "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-haptics": "~57.0.3",
@@ -18,7 +19,9 @@
     "expo-sharing": "~57.0.22",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "expo-task-manager": "~57.0.21",
     "fflate": "^0.8.3",
+    "firebase": "^12.19.0",
     "ical.js": "^1.5.0",
     "react": "19.2.3",
     "react-dom": "^19.2.3",
@@ -32,7 +35,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "node test/core.test.js",
+    "test": "node test/core.test.js && node test/sync.test.js",
     "web:build": "expo export --platform web",
     "android:bundle-check": "expo export --platform android --output-dir /tmp/bundle-check"
   },

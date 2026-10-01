@@ -7,6 +7,7 @@ import { getKeys, setKey } from '../storage/keys';
 import { testKey } from '../core/ai';
 import { store } from '../storage/store';
 import { feeds } from '../services/feeds';
+import { sync } from '../services/sync';
 
 const BG_CHOICES = ['#16202c', '#1f2430', '#101418', '#2b2f3a', '#243b37', '#3a2d3f'];
 const Row = ({ t, label, children, hint }) => (
@@ -19,7 +20,45 @@ const Row = ({ t, label, children, hint }) => (
   </View>
 );
 
-export default function SettingsScreen({ t, s, feedStatus }) {
+const PHASE = { starting: '준비 중…', 'signed-out': '로그인하지 않음 — 이 폰에서만 저장됩니다', connecting: '연결 중…', online: '동기화됨', offline: '오프라인 — 연결되면 자동으로 맞춥니다', error: '오류' };
+
+function SyncSection({ t, syncState }) {
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const out = syncState.phase === 'signed-out' || syncState.phase === 'starting' || (syncState.phase === 'error' && !syncState.email);
+  const login = async () => {
+    if (!email.trim() || !pw) return setMsg('이메일과 비밀번호를 입력하세요.');
+    setBusy(true); setMsg('로그인 중…');
+    const r = await sync.login(email, pw);
+    setBusy(false);
+    if (r.ok) { setPw(''); setMsg(''); } else setMsg(r.error || '로그인하지 못했습니다.');
+  };
+  const color = syncState.phase === 'online' ? t.c.ok : syncState.phase === 'error' ? t.c.danger : t.c.muted;
+  return (
+    <Section t={t} title="클라우드 동기화 (PC와 연동)">
+      <Text style={{ color: t.c.faint, fontSize: t.fs(12.5), lineHeight: t.fs(18) }}>PC 캘린더와 같은 계정으로 로그인하면 일정이 실시간으로 맞춰집니다. 이 폰에 이미 있는 일정은 처음 로그인할 때 함께 올라갑니다. 인터넷이 끊겨도 폰에서는 계속 쓸 수 있고, 연결되면 자동으로 맞춥니다.</Text>
+      <Text style={{ color, fontSize: t.fs(13) }}>{PHASE[syncState.phase] || syncState.phase}{syncState.error ? ` — ${syncState.error}` : ''}</Text>
+      {out ? (
+        <View style={{ gap: 8 }}>
+          <Input t={t} value={email} onChangeText={setEmail} placeholder="이메일" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} textContentType="username" />
+          <Input t={t} value={pw} onChangeText={setPw} placeholder="비밀번호" secureTextEntry autoCapitalize="none" textContentType="password" onSubmitEditing={login} />
+          <Btn t={t} kind="primary" label={busy ? '로그인 중…' : '로그인'} disabled={busy} onPress={login} />
+          {msg ? <Text style={{ color: /하지|맞지|연결|입력|오류|권한|규칙/.test(msg) ? t.c.danger : t.c.muted, fontSize: t.fs(13) }}>{msg}</Text> : null}
+        </View>
+      ) : (
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: t.c.text, fontSize: t.fs(14) }}>로그인한 계정: {syncState.email}</Text>
+          <Btn t={t} label="로그아웃" onPress={() => sync.logout()} style={{ alignSelf: 'flex-start' }} />
+          <Text style={{ color: t.c.faint, fontSize: t.fs(12) }}>로그아웃해도 이 폰의 일정은 남고 동기화만 멈춥니다. 다른 계정으로 로그인하면 이 폰의 일정은 그 계정의 데이터로 바뀝니다.</Text>
+        </View>
+      )}
+    </Section>
+  );
+}
+
+export default function SettingsScreen({ t, s, feedStatus, syncState }) {
   const save = (patch) => settingsStore.update(patch);
   const setColor = (k, v) => save({ colors: { ...s.colors, [k]: v } });
   const [keys, setKeys] = useState({ gemini: '', claude: '' });
@@ -75,6 +114,7 @@ export default function SettingsScreen({ t, s, feedStatus }) {
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+      <SyncSection t={t} syncState={syncState} />
       <Section t={t} title="모양">
         <Field t={t} label="글꼴">
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

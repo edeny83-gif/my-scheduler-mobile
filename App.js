@@ -14,6 +14,7 @@ import AssistantScreen from './src/ui/AssistantScreen';
 import SettingsScreen from './src/ui/SettingsScreen';
 import { setupNotifications, onNotificationOpen } from './src/services/notifications';
 import { sod, monthStart } from './src/core/dates';
+import { settings as settingsStore } from './src/storage/settings';
 
 export const EXPANDED_MIN_WIDTH = 600;
 
@@ -61,11 +62,21 @@ function Main() {
     return <View style={{ flex: 1, backgroundColor: app.settings.colors.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#a8e0ff" /></View>;
   }
 
+  const syncBanner = app.sync.phase === 'signed-out' && !app.settings.syncPromptDismissed ? (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginTop: 6, paddingVertical: 4, paddingLeft: 12, borderRadius: 10, backgroundColor: t.c.panel2 }}>
+      <Pressable onPress={() => { setTab('settings'); setPane('settings'); }} accessibilityRole="button" style={{ flex: 1, paddingVertical: 8 }}>
+        <Text style={{ color: t.c.text, fontSize: t.fs(13), fontFamily: t.font }}>☁ PC와 동기화하려면 로그인하세요 ›</Text>
+      </Pressable>
+      <Pressable onPress={() => settingsStore.update({ syncPromptDismissed: true })} hitSlop={10} accessibilityRole="button" accessibilityLabel="안내 닫기" style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
+        <Text style={{ color: t.c.muted }}>✕</Text>
+      </Pressable>
+    </View>
+  ) : null;
   const closeEditor = (dayMs) => { setEditor(null); if (dayMs != null) { setSelected(dayMs); setView(monthStart(dayMs)); } };
   const month = (
     <MonthView
       t={t} view={view} setView={setView} selected={selected} items={items} holidays={app.holidays} settings={app.settings}
-      compactHeader={!expanded && height < 700}
+      compactHeader={!expanded && height < 700} syncPhase={app.sync.phase}
       onSelectDay={(d) => { setSelected(d); if (expanded) { setPane('day'); setEditor(null); } }}
       onAddDay={(d) => { setSelected(d); setEditor({ day: d }); }}
       onOpenItem={(e) => setEditor({ item: e })}
@@ -81,7 +92,7 @@ function Main() {
       onOpenItem={(e) => setEditor({ item: e })} onAdd={() => setEditor({ day: selected })} style={{ flex: 1 }} />
   );
   const assistant = <AssistantScreen t={t} settings={app.settings} initialAction={assistAction} onGoSettings={() => { setTab('settings'); setPane('settings'); }} onShowDay={() => goDay(selected)} />;
-  const settingsView = <SettingsScreen t={t} s={app.settings} feedStatus={app.feedStatus} />;
+  const settingsView = <SettingsScreen t={t} s={app.settings} feedStatus={app.feedStatus} syncState={app.sync} />;
 
   // ---------------- 넓은 화면 (폴드7 펼침) ----------------
   if (expanded) {
@@ -92,6 +103,7 @@ function Main() {
         <View style={{ flex: width < 900 ? 1.65 : 1.4, paddingTop: 10, paddingHorizontal: 8, paddingBottom: 8 }}>{month}</View>
         <View style={{ width: 1, backgroundColor: t.c.line }} />
         <View style={{ flex: 1 }}>
+          {syncBanner}
           {editor ? (
             <EventEditor key={editor.item?.id || `new-${editor.day}`} t={t} item={editor.item} day={editor.day} onClose={closeEditor} embedded />
           ) : (
@@ -121,6 +133,7 @@ function Main() {
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg, paddingTop: insets.top }}>
       <StatusBar style="light" />
+      {syncBanner}
       <View style={{ flex: 1 }}>
         {tab === 'calendar' && (
           <View style={{ flex: 1, paddingTop: 8 }}>

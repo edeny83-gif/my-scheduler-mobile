@@ -1,7 +1,7 @@
 # MyScheduler 모바일 — Claude Code 작업 지침
 
 PC 바탕화면 캘린더(my-scheduler-desktop)와 같은 기능의 안드로이드 앱. **한 코드로 일반 폰과 갤럭시 폴드7(접음/펼침)을 모두 지원**하고, 나중에 같은 코드로 아이폰 앱을 만든다.
-Expo SDK 57 / React Native 0.86. 지금은 **폰 단독**(데이터는 폰 안). Firebase 실시간 연동은 다음 단계.
+Expo SDK 57 / React Native 0.86. 데이터의 원본은 폰 안(AsyncStorage)이고, 로그인하면 Firebase(Firestore)로 PC 캘린더와 실시간 동기화한다.
 사용자는 교사이며 요청·답변·커밋 메시지는 한국어.
 
 ## 폴더 구조
@@ -15,7 +15,10 @@ Expo SDK 57 / React Native 0.86. 지금은 **폰 단독**(데이터는 폰 안).
 | ├ `ical.js` | 공휴일·구글·외부 iCal 해석(반복 펼침) |
 | ├ `extract.js` | HWP 5.x·HWPX·DOCX 글자 추출 (Uint8Array만 사용) |
 | └ `ai.js` | Gemini/Claude 분석. 파일은 `{name, ext, size, bytes(), base64(), upload()}` 객체로 추상화 |
-| `src/storage/` | `store.js`(일정, AsyncStorage), `settings.js`(설정·기본값), `keys.js`(API 키, SecureStore) |
+| `src/storage/` | `store.js`(일정 — 저장만 담당, 로직은 `core/sync-core.js`), `settings.js`(설정·기본값), `keys.js`(API 키, SecureStore) |
+| `src/core/sync-core.js` | **PC·폰 공통(PC 프로젝트의 `sync-core.js`와 내용이 같아야 함)**: 최신 우선 합치기, SyncEngine, Firestore 구독/올리기 |
+| `src/services/sync.js` | 로그인 상태 + 실시간 구독 + 올리기. `firebase.native.js`(폰: AsyncStorage 로그인 유지, long polling) / `firebase.js`(웹 미리보기) |
+| `src/services/backgroundSync.js` | 앱이 꺼져 있을 때 약 15분마다 서버 확인 → 알림·위젯 갱신 (expo-background-task) |
 | `src/services/` | `feeds.js`(iCal 받기·캐시), `notifications.js`(알림 예약), `files.js`(문서·사진·촬영·녹음 → 파일 객체) |
 | `src/ui/` | `MonthView` `DayList` `EventEditor` `AssistantScreen` `SettingsScreen` `common`(버튼·입력·날짜 선택) `theme` |
 | `src/widget/` | 홈 화면 위젯(react-native-android-widget). 앱이 꺼져 있어도 AsyncStorage에서 직접 읽어 그린다 |
@@ -29,7 +32,8 @@ AsyncStorage `myscheduler.events.v1` = `{ version: 1, events: [...] }` — PC의
 ```
 - 종일 일정 end = 마지막 날 00:00(포함). 알림 remind: 시간 일정은 시작 전 분, 종일은 00:00 기준(-480 = 당일 오전 8시, 900 = 전날 오전 9시).
 - 필드를 바꾸면 `src/core/convert.js`(cleanEvent·itemToEvent·eventToItem)와 PC 쪽 `store.js`·`convert.js`를 함께 고친다.
-- Firebase 연동 시 `src/storage/store.js`를 같은 인터페이스(load/list/add/addMany/update/remove/subscribe)로 교체한다.
+- 서버 경로 `users/{uid}/events/{id}`, **updatedAt이 큰 쪽이 이김**, 삭제는 `deleted:true` 표시, 못 올린 변경은 `dirty`에 기록(서버 첫 응답 후 전송). 자세한 규칙은 PC 프로젝트 CLAUDE.md의 "클라우드 동기화".
+- 일정 필드를 바꾸면 `sync-core.js`를 PC 프로젝트와 똑같이 고치고 `npm test`(sync.test.js)로 확인한다.
 
 ## 화면 규칙 (사용자 요구사항)
 - 오늘: 칸 전체 연한 흰 바탕만(동그라미·노란색 금지). 일정: 배경 없이 **글자색만**. 여러 날 일정: ←── 제목 ──→.
@@ -50,7 +54,7 @@ AsyncStorage `myscheduler.events.v1` = `{ version: 1, events: [...] }` — PC의
 서명은 Expo 기본 키(항상 같음)라 새 APK를 기존 앱 위에 설치할 수 있다. Play 스토어에 올릴 때는 별도 서명 키가 필요.
 
 ## 다음 단계 후보
-- Firebase 실시간 연동(PC와 공유), 로그인.
+- (완료) Firebase 동기화·로그인. 남은 것: 즉시 반영이 필요하면 Blaze 요금제 + Cloud Functions/FCM 푸시.
 - 아이폰: 같은 코드 + EAS Build(Apple 개발자 계정 필요). 홈 화면 위젯은 Swift(WidgetKit) 타깃을 따로 추가해야 한다.
 - 폴드 플렉스 모드(반쯤 접음): Jetpack WindowManager 연동 네이티브 모듈 필요.
 - 다른 앱(메신저 등)에서 "공유"로 파일 받기: share intent 플러그인.

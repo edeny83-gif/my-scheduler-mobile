@@ -4,7 +4,7 @@ import { PanResponder, Pressable, Text, View } from 'react-native';
 import { buildMonth, holidayMap } from '../core/monthLayout';
 import { DOW, ymd, hm, sod, addMonths, monthStart } from '../core/dates';
 
-export default function MonthView({ t, view, setView, selected, onSelectDay, onAddDay, onOpenItem, items, holidays, settings, onHeaderAction, compactHeader }) {
+export default function MonthView({ t, view, setView, selected, onSelectDay, onAddDay, onOpenItem, items, holidays, settings, onHeaderAction, compactHeader, syncPhase }) {
   const month = useMemo(() => buildMonth(view, items, { maxLanes: settings.maxLanes ?? 3 }), [view, items, settings.maxLanes]);
   const hol = useMemo(() => holidayMap(holidays, settings.holidays?.observances), [holidays, settings.holidays?.observances]);
   const [weekH, setWeekH] = useState(0);
@@ -31,6 +31,7 @@ export default function MonthView({ t, view, setView, selected, onSelectDay, onA
           <Text style={{ color: t.c.text, fontSize: t.fs(compactHeader ? 30 : 38), fontWeight: '200', fontFamily: t.font, fontVariant: ['tabular-nums'] }}>{month.month + 1}</Text>
           <Text style={{ color: t.c.text, fontSize: t.fs(16), fontWeight: '300', marginLeft: 2, fontFamily: t.font }}>월</Text>
           <Text style={{ color: t.c.muted, fontSize: t.fs(13), marginLeft: 8, fontFamily: t.font }}>{month.year}</Text>
+          <View accessibilityLabel={`동기화 ${syncPhase || ''}`} style={{ width: 7, height: 7, borderRadius: 4, marginLeft: 8, alignSelf: 'center', backgroundColor: syncPhase === 'online' ? t.c.ok : syncPhase === 'error' ? t.c.danger : syncPhase === 'connecting' || syncPhase === 'offline' ? t.c.warn : t.c.faint }} />
         </Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {[['‹', '이전 달', () => setView((v) => addMonths(v, -1))], ['오늘', '오늘', () => { setView(monthStart(Date.now())); onSelectDay(sod(Date.now())); }], ['›', '다음 달', () => setView((v) => addMonths(v, 1))]].map(([l, a, fn]) => (
