@@ -9,6 +9,7 @@
     "expo": "~57.0.26",
     "expo-audio": "~57.0.5",
     "expo-background-task": "~57.0.21",
+    "expo-calendar": "~57.0.5",
     "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-haptics": "~57.0.3",
@@ -36,7 +37,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "node test/core.test.js && node test/sync.test.js && node test/guard.test.js",
+    "test": "node test/core.test.js && node test/sync.test.js && node test/guard.test.js && node test/mirror.test.js",
     "web:build": "expo export --platform web",
     "android:bundle-check": "expo export --platform android --output-dir /tmp/bundle-check"
   },
