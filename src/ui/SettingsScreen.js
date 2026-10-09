@@ -8,6 +8,7 @@ import { testKey } from '../core/ai';
 import { store } from '../storage/store';
 import { feeds } from '../services/feeds';
 import { sync } from '../services/sync';
+import { deviceCalendarSupported, getMirrorStatus, rebuildMirror, requestDeviceCalendarPermission, subscribeMirror } from '../services/deviceCalendar';
 
 const BG_CHOICES = ['#16202c', '#1f2430', '#101418', '#2b2f3a', '#243b37', '#3a2d3f'];
 const Row = ({ t, label, children, hint }) => (
@@ -54,6 +55,37 @@ function SyncSection({ t, syncState }) {
           <Text style={{ color: t.c.faint, fontSize: t.fs(12) }}>로그아웃해도 이 폰의 일정은 남고 동기화만 멈춥니다. 다른 계정으로 로그인하면 이 폰의 일정은 그 계정의 데이터로 바뀝니다.</Text>
         </View>
       )}
+    </Section>
+  );
+}
+
+const hhmm = (ms) => new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+
+/** 폰 캘린더에도 함께 저장(안드로이드) — 라이프 인사이트 같은 다른 앱이 일정 개수·시간을 읽을 수 있게 */
+function DeviceCalendarSection({ t, s, save }) {
+  const [st, setSt] = useState(getMirrorStatus);
+  useEffect(() => subscribeMirror(setSt), []);
+  const dc = s.deviceCalendar;
+  const toggle = async (v) => {
+    if (v && !(await requestDeviceCalendarPermission())) return; // 거부하면 켜지 않는다(아래에 안내가 뜸)
+    save({ deviceCalendar: { ...dc, enabled: v } });
+  };
+  const msg = st.state === 'working' ? ['폰 캘린더에 맞추는 중…', t.c.muted]
+    : st.state === 'ok' && dc.enabled ? [`폰 캘린더에 일정 ${st.count}개 저장됨 · ${hhmm(st.at)}`, t.c.ok]
+    : st.state === 'no-permission' ? ["캘린더 권한이 없어 저장하지 못했습니다. 스위치를 다시 켜서 '허용'을 누르세요. 이미 거부했다면 폰 설정 → 애플리케이션 → 내 캘린더 → 권한 → 캘린더에서 허용하세요.", t.c.danger]
+    : st.state === 'error' ? [`폰 캘린더에 저장하지 못했습니다: ${st.error}`, t.c.danger]
+    : null;
+  return (
+    <Section t={t} title="폰 캘린더에 함께 저장">
+      <Text style={{ color: t.c.faint, fontSize: t.fs(12.5), lineHeight: t.fs(18) }}>폰의 공용 캘린더(삼성·구글 캘린더가 함께 쓰는 곳)에 "내 캘린더 앱"이라는 캘린더를 만들고 일정을 복사해 둡니다. 라이프 인사이트처럼 다른 앱이 일정 개수와 시간을 읽을 수 있어요. 원본은 이 앱이고, 끄면 복사본을 지웁니다.</Text>
+      <Row t={t} label="폰 캘린더에도 함께 저장"><Switch value={dc.enabled} onValueChange={toggle} /></Row>
+      {dc.enabled && (
+        <Row t={t} label="제목도 함께 저장" hint="끄면 제목 대신 '일정'으로만 저장해서 다른 앱은 시간만 알 수 있어요. 켜면 삼성 캘린더 등에서도 제목이 보입니다.">
+          <Switch value={dc.withTitles} onValueChange={(v) => save({ deviceCalendar: { ...dc, withTitles: v } })} />
+        </Row>
+      )}
+      {msg ? <Text style={{ color: msg[1], fontSize: t.fs(13), lineHeight: t.fs(18) }}>{msg[0]}</Text> : null}
+      {dc.enabled && <Btn t={t} kind="ghost" small label="처음부터 다시 맞추기" onPress={() => rebuildMirror(store.list(), dc)} style={{ alignSelf: 'flex-start' }} />}
     </Section>
   );
 }
@@ -182,6 +214,8 @@ export default function SettingsScreen({ t, s, feedStatus, syncState }) {
           </View>
         </Field>
       </Section>
+
+      {deviceCalendarSupported && <DeviceCalendarSection t={t} s={s} save={save} />}
 
       <Section t={t} title="AI 비서">
         <Text style={{ color: t.c.faint, fontSize: t.fs(12.5), lineHeight: t.fs(18) }}>본인의 API 키가 필요합니다. 키는 폰의 보안 저장소에 암호화되어 저장됩니다. 학교 문서를 보낼 때는 학생 개인정보가 담겼는지 확인하세요.</Text>

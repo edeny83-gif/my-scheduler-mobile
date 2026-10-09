@@ -20,6 +20,8 @@ Expo SDK 57 / React Native 0.86. 데이터의 원본은 폰 안(AsyncStorage)이
 | `src/services/sync.js` | 로그인 상태 + 실시간 구독 + 올리기. `firebase.native.js`(폰: AsyncStorage 로그인 유지, long polling) / `firebase.js`(웹 미리보기) |
 | `src/services/backgroundSync.js` | 앱이 꺼져 있을 때 약 15분마다 서버 확인 → 알림·위젯 갱신 (expo-background-task) |
 | `src/services/` | `feeds.js`(iCal 받기·캐시), `notifications.js`(알림 예약), `files.js`(문서·사진·촬영·녹음 → 파일 객체) |
+| `src/services/deviceCalendar.js` | **폰 캘린더에도 함께 저장**(안드로이드, 설정에서 켬): 폰 공용 캘린더에 "내 캘린더 앱" 캘린더(LOCAL 계정)를 만들고 일정 복사본을 맞춘다. 라이프 인사이트 같은 다른 앱이 일정 개수·시간을 읽게 하려는 것. 끄면 그 캘린더를 지운다. 일정→복사본 대응표는 AsyncStorage `myscheduler.deviceCalendar.v1`(이 기기 전용, 동기화 안 함). expo-calendar는 **새 API(`createCalendar`, `cal.createEvent`, `ExpoCalendarEvent.get`)만** 쓴다 — SDK 57에서 옛 함수(`…Async`)는 실행하면 오류 |
+| `src/core/mirror.js` | 복사본 규칙(순수 로직): 무엇을 만들고·고치고·지울지, 종일 일정은 이 기기 날짜의 UTC 자정으로(안드로이드 규칙), 지난 400일까지만, 제목 숨김 시 "일정" |
 | `src/ui/` | `MonthView` `DayList` `EventEditor` `QuickPrompt`(달력 아래 글·말 빠른 입력) `AssistantScreen` `SettingsScreen` `common`(버튼·입력·날짜 선택) `theme` |
 | `src/widget/` | 홈 화면 위젯(react-native-android-widget). 앱이 꺼져 있어도 AsyncStorage에서 직접 읽어 그린다. 아래 목록 = 선택한 날(기본 오늘, `state.js`에 30분 기억). 날짜 누르기 = SELECT_DAY, 누른 뒤 1.5초 안에 한 번 더 = 앱을 그 날짜로 열기(myscheduler://day/YYYY-MM-DD) |
 | `test/` | `npm test`(핵심 로직), `fixtures/`(샘플 HWP·HWPX·DOCX) |

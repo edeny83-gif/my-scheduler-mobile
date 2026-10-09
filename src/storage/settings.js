@@ -12,6 +12,7 @@ export const DEFAULTS = {
   holidays: { enabled: true, observances: false },
   google: { enabled: false, email: '', privateUrl: '', color: '#ffd28a' },
   calendars: [],
+  deviceCalendar: { enabled: false, withTitles: false }, // 폰 공용 캘린더에도 복사본 저장(services/deviceCalendar.js)
   syncPromptDismissed: false,   // 동기화 로그인 안내 배너를 닫았는지
   ai: { provider: 'gemini', geminiModel: 'gemini-2.5-flash', claudeModel: 'claude-sonnet-5-5', about: '학교 교사', autoAdd: false, minConfidence: 0.6, color: '#ffd28a' },
 };
@@ -22,6 +23,7 @@ const merge = (saved) => ({
   widget: { ...DEFAULTS.widget, ...(saved.widget || {}) },
   holidays: { ...DEFAULTS.holidays, ...(saved.holidays || {}) },
   google: { ...DEFAULTS.google, ...(saved.google || {}) },
+  deviceCalendar: { ...DEFAULTS.deviceCalendar, ...(saved.deviceCalendar || {}) },
   ai: { ...DEFAULTS.ai, ...(saved.ai || {}) },
 });
 

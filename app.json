@@ -2,7 +2,7 @@
   "expo": {
     "name": "내 캘린더",
     "slug": "my-scheduler-mobile",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "myscheduler",
@@ -92,7 +92,13 @@
           ]
         }
       ],
-      "expo-background-task"
+      "expo-background-task",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "일정을 폰 캘린더에도 함께 저장해 다른 앱이 볼 수 있게 하려고 캘린더를 사용합니다."
+        }
+      ]
     ],
     "runtimeVersion": {
       "policy": "appVersion"
