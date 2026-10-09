@@ -11,7 +11,7 @@ import { store } from '../storage/store';
 
 const label = (it) => {
   const d = new Date(parseYmd(it.date));
-  const tm = parseHm(it.time) ? ` ${it.time}` : '';
+  const tm = parseHm(it.time) ? ` ${it.time}${parseHm(it.endTime) ? `~${it.endTime}` : ''}` : '';
   return `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})${tm} ${it.title}`;
 };
 

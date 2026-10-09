@@ -24,6 +24,34 @@ const ms = (y, m, d, h = 0, mi = 0) => new Date(y, m - 1, d, h, mi).getTime();
   assert.deepStrictEqual(cleanEvent({ title: 'a', start: 1, remind: [30, -480, -5000, 30] }).remind, [-480, 30]);
   ok('시간·종일·여러 날·마감 알림 기본값·중복·잘못된 날짜');
 
+  console.log('시각 글자 바로잡기 (빠른 입력이 종일로 들어가던 문제)');
+  const { findTimes, fixItemTimes } = require('../src/core/timeText');
+  const tm = (s) => findTimes(s).map((x) => [x.start.join(':'), x.end ? x.end.join(':') : '']);
+  assert.deepStrictEqual(tm('학부모 상담 2시~3시'), [['14:0', '15:0']]);
+  assert.deepStrictEqual(tm('오후 2시 30분 회의'), [['14:30', '']]);
+  assert.deepStrictEqual(tm('오전 11시~오후 1시 연수'), [['11:0', '13:0']]);
+  assert.deepStrictEqual(tm('회의(14:00-15:30)'), [['14:0', '15:30']]);
+  assert.deepStrictEqual(tm('2시부터 3시 반까지 연수'), [['14:0', '15:30']]);
+  assert.deepStrictEqual(tm('2~3시 상담'), [['14:0', '15:0']]);
+  assert.deepStrictEqual(tm('9시 반 회의 / 저녁 7시 모임 / 7:30 출근 / 3pm'), [['9:30', ''], ['19:0', ''], ['7:30', ''], ['15:0', '']]);
+  for (const s of ['3시간 독서', '1,2교시 컴퓨터실 수업', '1:1 상담', '6학년 연극 6', '시험 대비 3시험', '10월 15일']) assert.deepStrictEqual(tm(s), [], s);
+  let fz = fixItemTimes({ title: '학부모 상담 2시~3시', date: '2026-10-15', time: '' });
+  assert.ok(fz.title === '학부모 상담' && fz.time === '14:00' && fz.endTime === '15:00');
+  fz = fixItemTimes({ title: '학부모 상담', date: '2026-10-15', time: '14:00~15:00' });
+  assert.ok(fz.time === '14:00' && fz.endTime === '15:00');
+  fz = fixItemTimes({ title: '학부모 상담 오후 2시', date: '2026-10-15', time: '14:00' });
+  assert.strictEqual(fz.title, '학부모 상담');
+  fz = fixItemTimes({ title: '학부모 상담', date: '2026-10-15', time: '' }, '10월 15일 학부모 상담 2시~3시 반');
+  assert.ok(fz.time === '14:00' && fz.endTime === '15:30');
+  assert.strictEqual(fixItemTimes({ title: '새벽 기차', date: '2026-10-15', time: '03:00' }).time, '03:00');
+  assert.strictEqual(fixItemTimes({ title: '운동회 9시', date: '2026-10-15', allDay: true }).title, '운동회 9시');
+  const e9 = itemToEvent({ title: '오후 3시에 교무회의', date: '2026-10-15', time: '' });
+  assert.ok(!e9.allDay && e9.title === '교무회의' && new Date(e9.start).getHours() === 15);
+  const e10 = itemToEvent({ title: '연수', date: '2026-10-15', time: '오후 2시', endTime: '4시 30분' });
+  assert.ok(!e10.allDay && new Date(e10.end).getHours() === 16 && new Date(e10.end).getMinutes() === 30);
+  assert.ok(itemToEvent({ title: '현장체험학습', date: '2026-10-15' }).allDay);
+  ok('2시~3시·오후 3시·14:00-15:30 → 시작·끝 시각, 제목에서 시각 빼기, 3시간·1,2교시는 시각 아님');
+
   console.log('월간 배치');
   const items = [
     { id: 'm', title: '수학여행', start: ms(2026, 10, 1), end: ms(2026, 10, 2), allDay: true },
@@ -115,6 +143,14 @@ const ms = (y, m, d, h = 0, mi = 0) => new Date(y, m - 1, d, h, mi).getTime();
   assert.ok(cap.body.generationConfig.responseSchema.properties.deletes);
   assert.deepStrictEqual(ai.parseJson('{"summary":"","items":[]}').deletes, []);
   ok('지우기: 내 일정(외부·지운 일정 제외)을 id와 함께 보내고 deletes를 받음');
+  const timeFetch = (item) => async (url, init) => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ summary: '', items: [item] }) }] } }] }) });
+  const rt1 = await ai.analyzeCommand({ text: '10월 15일 학부모 상담 2시~3시' }, { fetch: timeFetch({ title: '학부모 상담 2시~3시', kind: '일정', date: '2026-10-15' }), keys: { gemini: 'g' }, provider: 'gemini', geminiModel: 'gm' });
+  assert.ok(rt1.items[0].title === '학부모 상담' && rt1.items[0].time === '14:00' && rt1.items[0].endTime === '15:00');
+  const rt2 = await ai.analyzeCommand({ text: '10월 15일 학부모 상담 14:00~15:30' }, { fetch: timeFetch({ title: '학부모 상담', kind: '일정', date: '2026-10-15', time: '' }), keys: { gemini: 'g' }, provider: 'gemini', geminiModel: 'gm' });
+  assert.ok(rt2.items[0].time === '14:00' && rt2.items[0].endTime === '15:30');
+  await ai.analyzeCommand({ text: 'x' }, { fetch: async (url, init) => { cap = { body: JSON.parse(init.body) }; return timeFetch({ title: 'x', kind: '일정', date: '2026-10-15' })(); }, keys: { gemini: 'g' }, provider: 'gemini', geminiModel: 'gm' });
+  assert.ok(cap.body.generationConfig.responseSchema.properties.items.items.required.includes('time'));
+  ok('빠른 입력: AI가 시각을 제목에 넣거나 빠뜨려도 요청 글에서 시작·끝 시각을 채움, 시각 칸은 필수');
   ai.RETRY.ms = [0, 0];
   let n = 0;
   const busy = (times) => async (url, init) => {
