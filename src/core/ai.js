@@ -3,6 +3,7 @@
 //          upload(url, headers): Promise<{status, body, headers}> }   // upload는 큰 녹음(Gemini 파일 API)용
 const { extractText, canExtract } = require('./extract');
 const { DOW, ymd, pad } = require('./dates');
+const { fixItemTimes } = require('./timeText');
 
 const GEMINI = 'https://generativelanguage.googleapis.com';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
@@ -31,7 +32,8 @@ function buildPrompt({ about, instruction, fileName, kind, now = new Date() }) {
 - date는 반드시 YYYY-MM-DD 절대 날짜. "다음 주 화요일", "이번 달 말" 같은 표현은 오늘을 기준으로 계산하고 요일이 맞는지 검산하세요.
 - 연도가 없으면 오늘 이후 가장 가까운 해당 날짜로 봅니다.
 - 날짜를 알 수 없는 항목은 items에 넣지 말고 undated에 넣으세요. 날짜를 지어내지 마세요.
-- time은 시각이 명시된 경우에만 HH:mm(24시간). 없으면 빈 문자열. endTime·endDate도 명시된 경우만.
+- time은 시각이 명시된 경우에만 HH:mm(24시간). 없으면 빈 문자열. 시간대(예: 14:00~15:30)면 끝 시각을 endTime에. endDate도 명시된 경우만.
+- title에는 날짜·시각을 넣지 마세요(시각은 time·endTime에만).
 - 여러 날 이어지는 일정은 date(시작)와 endDate(끝)를 모두 채우세요.
 - kind: 참석·행사 등은 "일정", 해야 할 업무는 "할 일", 제출·신청·납부 기한은 "마감".
 - title은 20자 이내로 구체적으로. memo에는 준비물·대상·담당자·제출처 등 필요한 내용만 짧게.
@@ -52,7 +54,7 @@ const SCHEMA = {
       title: { type: 'STRING' }, kind: { type: 'STRING', enum: ['일정', '할 일', '마감'] }, date: { type: 'STRING' },
       endDate: { type: 'STRING' }, time: { type: 'STRING' }, endTime: { type: 'STRING' }, location: { type: 'STRING' },
       memo: { type: 'STRING' }, evidence: { type: 'STRING' }, confidence: { type: 'NUMBER' },
-    }, required: ['title', 'kind', 'date'] } },
+    }, required: ['title', 'kind', 'date', 'time', 'endTime', 'endDate'] } }, // 시각 칸을 빠뜨리지 않게(없으면 빈 문자열)
     undated: { type: 'ARRAY', items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, note: { type: 'STRING' } }, required: ['title'] } },
     deletes: { type: 'ARRAY', items: { type: 'STRING' } }, // 빠른 입력에서 "지워 줘" → 지울 일정 id
   },
@@ -199,7 +201,9 @@ async function analyzeFile(file, opts) {
     content.push({ type: 'text', text: prompt });
     raw = await claudeGenerate(fetchFn, keys.claude, opts.claudeModel, content, onStage);
   }
-  return { fileName: file.name, kind, provider, note, ...parseJson(raw) };
+  const out = parseJson(raw);
+  out.items = out.items.map((it) => fixItemTimes(it)); // 시각이 제목에 섞이거나 "오후 3시"처럼 오면 바로잡기
+  return { fileName: file.name, kind, provider, note, ...out };
 }
 
 // 빠른 입력(달력 아래 칸): 사용자가 직접 적거나 말한 요청 → 일정 후보
@@ -226,10 +230,13 @@ ${voice ? '첨부한 음성은 사용자가 캘린더에 일정을 넣어 달라
 - date는 반드시 YYYY-MM-DD 절대 날짜. "내일", "다음 주 화요일", "이번 달 말" 같은 표현은 오늘을 기준으로 계산하고 요일이 맞는지 검산하세요.
 - 연도가 없으면 오늘 이후 가장 가까운 해당 날짜로 봅니다.
 - 날짜를 알 수 없으면 items에 넣지 말고 undated에 넣으세요. 날짜를 지어내지 마세요.
-- time은 시각이 있을 때만 HH:mm(24시간). "오후 3시"는 15:00, 시각이 없으면 빈 문자열. "3시"처럼 오전·오후가 없으면 학교 일과 기준(1~6시는 오후)으로 판단하세요.
+- 시각·시간대: 시작 시각은 time, 끝 시각은 endTime에 HH:mm(24시간)으로 넣으세요. 시각이 전혀 없을 때만 둘 다 빈 문자열(종일 일정)입니다.
+  예) "2시~3시 반" → time 14:00, endTime 15:30 / "오후 3시" → time 15:00, endTime "" / "14:00-15:00" → time 14:00, endTime 15:00
+  "3시"처럼 오전·오후가 없으면 학교 일과 기준(1~6시는 오후)으로 판단하세요.
+- title에는 날짜·요일·시각을 넣지 마세요. 예) "10월 15일 2시~3시 학부모 상담" → title "학부모 상담"
 - 여러 날 이어지는 일정은 date(시작)와 endDate(끝)를 모두 채우세요. "매주" 같은 반복은 앞으로 4번까지만 각각 항목으로 만드세요.
 - kind: 참석·행사 등은 "일정", 해야 할 업무는 "할 일", 제출·신청·납부 기한은 "마감".
-- title은 20자 이내로 구체적으로. 장소는 location, 준비물·대상 등은 memo에 짧게.
+- title은 20자 이내로 구체적으로(시각 빼고). 장소는 location, 준비물·대상 등은 memo에 짧게.
 - evidence에는 근거가 된 요청 속 표현을 40자 이내로. confidence는 0~1.
 - summary는 ${voice ? '받아 적은 말 그대로' : '한 문장 요약'}.
 - 일정 추가와 관계없는 말(인사, 질문 등)만 있으면 items를 비우고 summary에 짧게 답하세요.
@@ -276,7 +283,11 @@ async function analyzeCommand({ text, audio, events }, opts) {
   } else {
     raw = await claudeGenerate(fetchFn, keys.claude, opts.claudeModel, [{ type: 'text', text: prompt }], onStage);
   }
-  return { fileName: '', kind: audio ? 'voice' : 'prompt', provider, note: '', ...parseJson(raw) };
+  const out = parseJson(raw);
+  // 시각이 제목에 섞이거나 빠진 경우 바로잡기. 일정이 하나뿐이면 사용자가 쓴(말한) 글에서 시각을 다시 읽어 채운다
+  const said = audio ? out.summary : text;
+  out.items = out.items.map((it) => fixItemTimes(it, out.items.length === 1 ? said : ''));
+  return { fileName: '', kind: audio ? 'voice' : 'prompt', provider, note: '', ...out };
 }
 
 async function testKey(provider, { fetch: fetchFn, key, geminiModel, claudeModel }) {

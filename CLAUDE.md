@@ -11,6 +11,7 @@ Expo SDK 57 / React Native 0.86. 데이터의 원본은 폰 안(AsyncStorage)이
 | `index.js` | 앱 등록 + 안드로이드 위젯 작업 처리기 등록 |
 | `src/core/` | **플랫폼 공통 순수 로직** (React·Node 기능 없음). PC 버전과 규칙이 같아야 한다 |
 | ├ `dates.js` `convert.js` | 날짜 도우미, AI 항목↔일정 변환, 알림 기본값, 중복 판별, 저장 전 검사 |
+| ├ `timeText.js` | 사람이 쓴 시각 글자 해석("오후 2시 반", "2시~3시", "14:00-15:30")과 AI 항목 시각 바로잡기(제목에 섞인 시각을 time·endTime으로). **PC의 `timeText.js`와 내용이 똑같아야 함** |
 | ├ `monthLayout.js` | 월간 배치(주·장기 일정 줄·넘침), 날짜별 목록, 다가오는 일정 |
 | ├ `ical.js` | 공휴일·구글·외부 iCal 해석(반복 펼침) |
 | ├ `extract.js` | HWP 5.x·HWPX·DOCX 글자 추출 (Uint8Array만 사용) |

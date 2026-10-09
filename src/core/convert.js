@@ -1,5 +1,6 @@
 // AI·외부 도구가 주는 항목(날짜 문자열) ↔ 저장 형식(ms) 변환, 알림 기본값, 중복 판별 — PC 버전과 동일 규칙
 const { parseYmd, parseHm, atTime, ymd, hm, sod } = require('./dates');
+const { fixItemTimes } = require('./timeText');
 
 /** 알림(분). 종일 일정은 00:00 기준: -480 = 당일 오전 8시, 900 = 전날 오전 9시 */
 function defaultRemind(kind, allDay) {
@@ -8,6 +9,8 @@ function defaultRemind(kind, allDay) {
 }
 
 function itemToEvent(it, { color = '', source = 'ai', fileName = '' } = {}) {
+  // "오후 3시"·"14:00~15:00"처럼 오거나 시각이 제목에 섞여 있으면 바로잡는다(안 그러면 종일 일정이 된다)
+  if (it.allDay !== true && !parseHm(it.time)) it = fixItemTimes(it);
   const title = String(it.title ?? '').trim();
   if (!title) throw new Error('제목이 없습니다');
   const d = parseYmd(it.date);
