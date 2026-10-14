@@ -11,11 +11,12 @@ Expo SDK 57 / React Native 0.86. 데이터의 원본은 폰 안(AsyncStorage)이
 | `index.js` | 앱 등록 + 안드로이드 위젯 작업 처리기 등록 |
 | `src/core/` | **플랫폼 공통 순수 로직** (React·Node 기능 없음). PC 버전과 규칙이 같아야 한다 |
 | ├ `dates.js` `convert.js` | 날짜 도우미, AI 항목↔일정 변환, 알림 기본값, 중복 판별, 저장 전 검사 |
-| ├ `timeText.js` | 사람이 쓴 시각 글자 해석("오후 2시 반", "2시~3시", "14:00-15:30")과 AI 항목 시각 바로잡기(제목에 섞인 시각을 time·endTime으로). **PC의 `timeText.js`와 내용이 똑같아야 함** |
+| ├ `timeText.js` | 사람이 쓴 시각 글자 해석("오후 2시 반", "2시~3시", "14:00-15:30")과 AI 항목 시각 바로잡기(제목에 섞인 시각을 time·endTime으로, "하루종일"이면 종일로). **PC의 `timeText.js`와 내용이 똑같아야 함** |
+| ├ `jsonReply.js` | AI 답글에서 결과(JSON)를 너그럽게 찾기(코드블록·앞뒤 설명·배열·잘린 답·쉼표). 못 찾으면 AI가 한 말을 담은 쉬운 오류. **PC의 `jsonReply.js`와 내용이 똑같아야 함** |
 | ├ `monthLayout.js` | 월간 배치(주·장기 일정 줄·넘침), 날짜별 목록, 다가오는 일정 |
 | ├ `ical.js` | 공휴일·구글·외부 iCal 해석(반복 펼침) |
 | ├ `extract.js` | HWP 5.x·HWPX·DOCX 글자 추출 (Uint8Array만 사용) |
-| └ `ai.js` | Gemini/Claude 분석. 파일은 `{name, ext, size, bytes(), base64(), upload()}` 객체로 추상화 |
+| └ `ai.js` | Gemini/Claude 분석. 파일은 `{name, ext, size, bytes(), base64(), upload()}` 객체로 추상화. 답을 못 읽으면(`askAndParse`) 같은 AI에게 형식만 지키라고 한 번 더 → 키가 있으면 다른 AI로, 서버가 붐비면(503) 재시도·Claude로 대신 |
 | `src/storage/` | `store.js`(일정 — 저장만 담당, 로직은 `core/sync-core.js`), `settings.js`(설정·기본값), `keys.js`(API 키, SecureStore) |
 | `src/core/sync-core.js` | **PC·폰 공통(PC 프로젝트의 `sync-core.js`와 내용이 같아야 함)**: 최신 우선 합치기, SyncEngine, Firestore 구독/올리기 |
 | `src/services/sync.js` | 로그인 상태 + 실시간 구독 + 올리기. `firebase.native.js`(폰: AsyncStorage 로그인 유지, long polling) / `firebase.js`(웹 미리보기) |
