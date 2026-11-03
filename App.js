@@ -13,6 +13,8 @@ import DayList from './src/ui/DayList';
 import EventEditor from './src/ui/EventEditor';
 import AssistantScreen from './src/ui/AssistantScreen';
 import SettingsScreen from './src/ui/SettingsScreen';
+import BriefingScreen from './src/ui/BriefingScreen';
+import { briefings, isBriefing } from './src/core/briefing';
 import QuickPrompt from './src/ui/QuickPrompt';
 import { setupNotifications, onNotificationOpen } from './src/services/notifications';
 import { sod, monthStart, parseYmd } from './src/core/dates';
@@ -39,8 +41,9 @@ function Main() {
 
   const [view, setView] = useState(() => monthStart(Date.now()));
   const [selected, setSelected] = useState(() => sod(Date.now()));
-  const [tab, setTab] = useState('calendar');          // 좁은 화면: calendar | assistant | settings
-  const [pane, setPane] = useState('assistant');       // 넓은 화면 오른쪽 칸: day | assistant | settings
+  const [tab, setTab] = useState('calendar');          // 좁은 화면: calendar | briefing | assistant | settings
+  const [pane, setPane] = useState('assistant');       // 넓은 화면 오른쪽 칸: day | briefing | assistant | settings
+  const [briefId, setBriefId] = useState(null);       // 브리핑 화면에서 먼저 보여 줄 브리핑
   const [side, setSideRaw] = useState(false);          // 넓은 화면 오른쪽 칸 보이기 (기본: 숨김 → 달력 전체)
   const setSide = (v) => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setSideRaw(v); };
   const [editor, setEditor] = useState(null);          // { item?, day? }
@@ -61,6 +64,9 @@ function Main() {
   const goDay = (ms) => { setSelected(sod(ms)); setView(monthStart(ms)); setTab('calendar'); setPane('day'); };
   const openAssistant = (action = null) => { setAssistAction(action); setTab('assistant'); setPane('assistant'); setSide(true); setEditor(null); };
   const goSettings = () => { setTab('settings'); setPane('settings'); setSide(true); };
+  const openBriefing = (id = null) => { setBriefId(id); setTab('briefing'); setPane('briefing'); setSide(true); setEditor(null); };
+  const openItem = (e) => (isBriefing(e) ? openBriefing(e.id) : setEditor({ item: e }));   // 브리핑 일정은 편집 창 대신 브리핑 화면으로
+  const todayBrief = useMemo(() => briefings(app.events).find((e) => sod(e.start) === sod(Date.now())), [app.events]);
 
   useEffect(() => {
     setupNotifications();
@@ -104,7 +110,7 @@ function Main() {
       compactHeader={!expanded && height < 700} syncPhase={app.sync.phase}
       onSelectDay={(d) => { setSelected(d); if (expanded && side) { setPane('day'); setEditor(null); } }}
       onAddDay={(d) => { setSelected(d); setEditor({ day: d }); }}
-      onOpenItem={(e) => setEditor({ item: e })}
+      onOpenItem={openItem}
       onHeaderAction={expanded ? (
         <Pressable onPress={() => (side ? setSide(false) : openAssistant())} accessibilityRole="button" accessibilityLabel={side ? 'AI 비서 칸 닫기' : 'AI 비서 칸 열기'} hitSlop={6}
           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', marginLeft: 6, paddingHorizontal: 12, minHeight: 44, borderRadius: 10, backgroundColor: pressed || side ? t.c.panel2 : t.c.panel })}>
@@ -120,15 +126,16 @@ function Main() {
   );
   const dayList = (
     <DayList t={t} day={selected} items={items} holidays={app.holidays} settings={app.settings}
-      onOpenItem={(e) => setEditor({ item: e })} onAdd={() => setEditor({ day: selected })} style={{ flex: 1 }} />
+      onOpenItem={openItem} onAdd={() => setEditor({ day: selected })} style={{ flex: 1 }} />
   );
+  const briefing = <BriefingScreen t={t} items={app.events} initialId={briefId} onShowDay={goDay} onEdit={(e) => setEditor({ item: e })} />;
   const assistant = <AssistantScreen t={t} settings={app.settings} initialAction={assistAction} onGoSettings={goSettings} onShowDay={() => goDay(selected)} />;
   const quick = <QuickPrompt t={t} settings={app.settings} onShowDay={goDay} onGoSettings={goSettings} />;
   const settingsView = <SettingsScreen t={t} s={app.settings} feedStatus={app.feedStatus} syncState={app.sync} />;
 
   // ---------------- 넓은 화면 (폴드7 펼침) ----------------
   if (expanded) {
-    const tabs = [['day', '일정'], ['assistant', '✦ 비서'], ['settings', '설정']];
+    const tabs = [['day', '일정'], ['briefing', todayBrief ? '📋 브리핑•' : '📋 브리핑'], ['assistant', '✦ 비서'], ['settings', '설정']];
     const showSide = side || !!editor;
     return (
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.c.bg, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, kbPad), paddingLeft: insets.left, paddingRight: insets.right }}>
@@ -147,14 +154,15 @@ function Main() {
             <>
               <View style={{ flexDirection: 'row', margin: 12, padding: 4, borderRadius: 12, backgroundColor: t.c.panel }} accessibilityRole="tablist">
                 {tabs.map(([k, l]) => (
-                  <Pressable key={k} onPress={() => setPane(k)} accessibilityRole="tab" accessibilityState={{ selected: pane === k }}
+                  <Pressable key={k} onPress={() => { if (k === 'briefing') setBriefId(null); setPane(k); }} accessibilityRole="tab" accessibilityState={{ selected: pane === k }}
                     style={{ flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center', backgroundColor: pane === k ? t.c.panel2 : 'transparent' }}>
-                    <Text style={{ color: pane === k ? t.c.text : t.c.muted, fontSize: t.fs(14), fontWeight: pane === k ? '600' : '400', fontFamily: t.font }}>{l}</Text>
+                    <Text style={{ color: pane === k ? t.c.text : t.c.muted, fontSize: t.fs(14), fontWeight: pane === k ? '600' : '400', fontFamily: t.font }} numberOfLines={1}>{l}</Text>
                   </Pressable>
                 ))}
               </View>
               <View style={{ flex: 1, paddingHorizontal: pane === 'day' ? 14 : 0 }}>
                 {pane === 'day' && dayList}
+                {pane === 'briefing' && briefing}
                 {pane === 'assistant' && assistant}
                 {pane === 'settings' && settingsView}
               </View>
@@ -166,7 +174,7 @@ function Main() {
   }
 
   // ---------------- 좁은 화면 (일반 폰, 폴드 커버 화면) ----------------
-  const tabs = [['calendar', '캘린더', '▦'], ['assistant', 'AI 비서', '✦'], ['settings', '설정', '⚙']];
+  const tabs = [['calendar', '캘린더', '▦'], ['briefing', '브리핑', todayBrief ? '📋●' : '📋'], ['assistant', 'AI 비서', '✦'], ['settings', '설정', '⚙']];
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg, paddingTop: insets.top, paddingBottom: kbPad }}>
       <StatusBar style="light" />
@@ -179,6 +187,7 @@ function Main() {
             <View style={{ paddingHorizontal: 10 }}>{quick}</View>
           </View>
         )}
+        {tab === 'briefing' && briefing}
         {tab === 'assistant' && assistant}
         {tab === 'settings' && (
           <View style={{ flex: 1 }}>
@@ -189,7 +198,7 @@ function Main() {
       </View>
       {!kb && <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: t.c.line, paddingBottom: insets.bottom, backgroundColor: t.c.bg }} accessibilityRole="tablist">
         {tabs.map(([k, l, icon]) => (
-          <Pressable key={k} onPress={() => setTab(k)} accessibilityRole="tab" accessibilityState={{ selected: tab === k }}
+          <Pressable key={k} onPress={() => { if (k === 'briefing') setBriefId(null); setTab(k); }} accessibilityRole="tab" accessibilityState={{ selected: tab === k }}
             style={{ flex: 1, alignItems: 'center', paddingVertical: 8, minHeight: 56, justifyContent: 'center' }}>
             <Text style={{ color: tab === k ? (k === 'assistant' ? t.c.warn : t.c.accent) : t.c.muted, fontSize: t.fs(18) }}>{icon}</Text>
             <Text style={{ color: tab === k ? t.c.text : t.c.muted, fontSize: t.fs(11.5), marginTop: 2, fontFamily: t.font }}>{l}</Text>
