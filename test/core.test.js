@@ -24,6 +24,23 @@ const ms = (y, m, d, h = 0, mi = 0) => new Date(y, m - 1, d, h, mi).getTime();
   assert.deepStrictEqual(cleanEvent({ title: 'a', start: 1, remind: [30, -480, -5000, 30] }).remind, [-480, 30]);
   ok('시간·종일·여러 날·마감 알림 기본값·중복·잘못된 날짜');
 
+  console.log('브리핑 (PC의 Claude가 저장한 "📋 브리핑 M/D" 종일 일정)');
+  const { isBriefing, briefings, parseBriefing, parseInline } = require('../src/core/briefing');
+  const b1 = { id: 'b1', title: '📋 브리핑 11/3', allDay: true, start: ms(2026, 11, 3), memo: '# 오늘\n- [미처리] 출석부 제출 — 마감 내일\n- [처리함] **협의회 자료** 회신함\n\n문단 글' };
+  const b0 = { id: 'b0', title: '📋 브리핑 11/2', allDay: true, start: ms(2026, 11, 2), memo: '어제' };
+  assert.ok(isBriefing(b1) && !isBriefing({ ...b1, allDay: false }) && !isBriefing({ ...b1, readOnly: true }) && !isBriefing({ title: '회의', allDay: true }));
+  assert.deepStrictEqual(briefings([b0, { id: 'x', title: '회의', allDay: true, start: 1 }, b1]).map((e) => e.id), ['b1', 'b0']);
+  const blocks = parseBriefing(b1.memo);
+  assert.deepStrictEqual(blocks.map((b) => b.type), ['h1', 'li', 'li', 'p']);
+  assert.deepStrictEqual(blocks[1].parts[0], { k: 'tag', v: '미처리', tone: 'todo' });
+  assert.deepStrictEqual(blocks[2].parts[0], { k: 'tag', v: '처리함', tone: 'done' });
+  assert.deepStrictEqual(blocks[2].parts[1], { k: 'text', v: ' ' });
+  assert.deepStrictEqual(blocks[2].parts[2], { k: 'bold', v: '협의회 자료' });
+  assert.deepStrictEqual(parseInline('a [판단 불가] b').map((p) => p.k), ['text', 'tag', 'text']);
+  assert.strictEqual(parseInline('[판단 불가]')[0].tone, '');
+  assert.deepStrictEqual(parseBriefing(''), []);
+  ok('브리핑 판별·최근순·제목·목록·꼬리표·굵게(PC와 같은 규칙)');
+
   console.log('시각 글자 바로잡기 (빠른 입력이 종일로 들어가던 문제)');
   const { findTimes, fixItemTimes } = require('../src/core/timeText');
   const tm = (s) => findTimes(s).map((x) => [x.start.join(':'), x.end ? x.end.join(':') : '']);
